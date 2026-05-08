@@ -22,8 +22,9 @@ import {
   ImageWidgetData,
 } from './types';
 const RGL = ReactGridLayout as any;
-const ResponsiveGridLayout = RGL.WidthProvider(
-  RGL.Responsive
+const ResponsiveGridLayout = (
+  RGL.Responsive ||
+  RGL.default?.Responsive
 ) as React.ComponentType<any>;
 const PresentationDashboard: React.FC = () => {
   const { widgets, layouts, dashboardBorderSettings } = useContext(DashboardContext)!;

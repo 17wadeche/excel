@@ -28,11 +28,9 @@ import html2canvas from 'html2canvas';
 import PresentationDashboard from './PresentationDashboard';
 const RGL = ReactGridLayout as any;
 
-const WidthProvider = RGL.WidthProvider || RGL.default;
-const Responsive = RGL.Responsive;
-
-const ResponsiveGridLayout = WidthProvider(
-  Responsive
+const ResponsiveGridLayout = (
+  RGL.Responsive ||
+  RGL.default?.Responsive
 ) as React.ComponentType<any>;
 
 const defaultTitleWidget: Widget = {
@@ -297,6 +295,22 @@ const Dashboard: React.FC<DashboardProps> = ({ isPresenterMode = false, closePre
   const [isScreenshotModalVisible, setIsScreenshotModalVisible] = useState(false);
   const [screenshotImage, setScreenshotImage] = useState<string | null>(null);
   const dashboardRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(1200);
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (dashboardRef.current) {
+        setContainerWidth(dashboardRef.current.offsetWidth || 1200);
+      }
+    };
+
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+
+    return () => {
+      window.removeEventListener('resize', updateWidth);
+    };
+  }, []);
   const handleSave = () => {
     if (currentDashboardId) {
       saveTemplate();
@@ -671,6 +685,7 @@ const Dashboard: React.FC<DashboardProps> = ({ isPresenterMode = false, closePre
           layouts={layouts}
           breakpoints={{ xxl: 1920, xl: 1600, lg: 1200, md: 996, sm: 768 }}
           cols={GRID_COLS}
+          width={containerWidth}
           rowHeight={10}
           onLayoutChange={handleLayoutChange}
           draggableHandle=".drag-handle"
