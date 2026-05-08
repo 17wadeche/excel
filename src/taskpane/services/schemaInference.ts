@@ -61,9 +61,7 @@ export function toNumber(value: unknown): number | null {
   }
 
   const negativeParentheses = trimmed.match(/^\((.*)\)$/);
-  const normalized = negativeParentheses
-    ? `-${negativeParentheses[1]}`
-    : trimmed;
+  const normalized = negativeParentheses ? `-${negativeParentheses[1]}` : trimmed;
 
   const cleaned = normalized.replace(/[$£€,\s]/g, "").replace(/%$/, "");
 
