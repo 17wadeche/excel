@@ -18,6 +18,20 @@ export type DashboardLayout = "executive" | "analyst" | "compact";
 
 export type CategorySortMode = "valueDesc" | "valueAsc" | "nameAsc" | "shareDesc";
 
+export type ChartVisualType = "area" | "line" | "bar" | "pie" | "donut";
+
+export interface DashboardTheme {
+  accentColor: string;
+  comparisonColor: string;
+  panelColor: string;
+}
+
+export interface DashboardViewSettings {
+  title: string;
+  accentColor: string;
+  chartType: ChartVisualType;
+}
+
 export interface DataColumn {
   name: string;
   index: number;
@@ -40,6 +54,10 @@ export interface DashboardConfig {
   categoryIndex?: number;
   dateIndex?: number;
   aggregation: AggregationType;
+  dashboardTitle: string;
+  dashboardSubtitle: string;
+  theme: DashboardTheme;
+  viewSettings: Record<DashboardViewId, DashboardViewSettings>;
   visibleViews: DashboardViewId[];
   layout: DashboardLayout;
   categorySort: CategorySortMode;

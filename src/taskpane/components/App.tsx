@@ -4,6 +4,7 @@ import { buildDashboardModel } from "../services/aggregations";
 import {
   AggregationType,
   CategorySortMode,
+  ChartVisualType,
   DashboardConfig,
   DashboardLayout,
   DashboardViewId,
@@ -21,6 +22,10 @@ export default function App({ title = "Workbook Dashboard" }: AppProps) {
   const [dataset, setDataset] = React.useState<WorkbookDataset | null>(null);
   const [config, setConfig] = React.useState<DashboardConfig>({
     aggregation: "sum",
+    dashboardTitle: title,
+    dashboardSubtitle: "A customizable workbook intelligence board built from the active Excel data.",
+    theme: DEFAULT_THEME,
+    viewSettings: DEFAULT_VIEW_SETTINGS,
     visibleViews: DEFAULT_VISIBLE_VIEWS,
     layout: "executive",
     categorySort: "valueDesc",
@@ -82,6 +87,42 @@ export default function App({ title = "Workbook Dashboard" }: AppProps) {
         visibleViews: visibleViews.length > 0 ? visibleViews : current.visibleViews,
       };
     });
+  }
+
+  function moveView(viewId: DashboardViewId, direction: -1 | 1) {
+    setConfig((current) => {
+      const currentIndex = current.visibleViews.indexOf(viewId);
+      const nextIndex = currentIndex + direction;
+
+      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= current.visibleViews.length) {
+        return current;
+      }
+
+      const visibleViews = [...current.visibleViews];
+      const [view] = visibleViews.splice(currentIndex, 1);
+      visibleViews.splice(nextIndex, 0, view);
+
+      return {
+        ...current,
+        visibleViews,
+      };
+    });
+  }
+
+  function updateViewSetting(
+    viewId: DashboardViewId,
+    setting: Partial<DashboardConfig["viewSettings"][DashboardViewId]>
+  ) {
+    setConfig((current) => ({
+      ...current,
+      viewSettings: {
+        ...current.viewSettings,
+        [viewId]: {
+          ...current.viewSettings[viewId],
+          ...setting,
+        },
+      },
+    }));
   }
 
   return (
@@ -211,6 +252,71 @@ export default function App({ title = "Workbook Dashboard" }: AppProps) {
             </label>
           </section>
 
+          <section className="designer-panel">
+            <div className="builder-copy">
+              <p className="eyebrow">Brand studio</p>
+              <h2>Name it, color it, make it yours</h2>
+              <p>Customize the dashboard title, subtitle, accent colors, comparison line, and panel surface.</p>
+            </div>
+
+            <div className="designer-controls">
+              <label className="field-selector text-field">
+                <span>Dashboard title</span>
+                <input
+                  value={config.dashboardTitle}
+                  onChange={(event) => updateConfig({ dashboardTitle: event.target.value })}
+                />
+              </label>
+
+              <label className="field-selector text-field text-field-wide">
+                <span>Subtitle</span>
+                <input
+                  value={config.dashboardSubtitle}
+                  onChange={(event) => updateConfig({ dashboardSubtitle: event.target.value })}
+                />
+              </label>
+
+              <ColorField
+                label="Accent"
+                value={config.theme.accentColor}
+                onChange={(accentColor) =>
+                  updateConfig({
+                    theme: {
+                      ...config.theme,
+                      accentColor,
+                    },
+                  })
+                }
+              />
+
+              <ColorField
+                label="Comparison"
+                value={config.theme.comparisonColor}
+                onChange={(comparisonColor) =>
+                  updateConfig({
+                    theme: {
+                      ...config.theme,
+                      comparisonColor,
+                    },
+                  })
+                }
+              />
+
+              <ColorField
+                label="Panel"
+                value={config.theme.panelColor}
+                onChange={(panelColor) =>
+                  updateConfig({
+                    theme: {
+                      ...config.theme,
+                      panelColor,
+                    },
+                  })
+                }
+              />
+            </div>
+          </section>
+
           <section className="builder-panel">
             <div className="builder-copy">
               <p className="eyebrow">Dashboard builder</p>
@@ -221,19 +327,75 @@ export default function App({ title = "Workbook Dashboard" }: AppProps) {
               </p>
             </div>
 
-            <div className="view-picker" aria-label="Dashboard views">
-              {DASHBOARD_VIEW_OPTIONS.map((option) => (
-                <button
-                  className={`view-chip ${visibleViewSet.has(option.id) ? "view-chip-active" : ""}`}
-                  key={option.id}
-                  type="button"
-                  onClick={() => toggleView(option.id)}
-                  aria-pressed={visibleViewSet.has(option.id)}
-                >
-                  <span>{option.label}</span>
-                  <small>{option.description}</small>
-                </button>
-              ))}
+            <div className="view-picker view-builder-list" aria-label="Dashboard views">
+              {DASHBOARD_VIEW_OPTIONS.map((option) => {
+                const viewIndex = config.visibleViews.indexOf(option.id);
+                const isVisible = visibleViewSet.has(option.id);
+                const viewSetting = config.viewSettings[option.id];
+
+                return (
+                  <article className={`view-chip view-builder-card ${isVisible ? "view-chip-active" : ""}`} key={option.id}>
+                    <div className="view-card-topline">
+                      <button
+                        type="button"
+                        onClick={() => toggleView(option.id)}
+                        aria-pressed={isVisible}
+                      >
+                        {isVisible ? "Visible" : "Hidden"}
+                      </button>
+                      <div className="move-buttons" aria-label={`Move ${option.label}`}>
+                        <button type="button" onClick={() => moveView(option.id, -1)} disabled={!isVisible || viewIndex <= 0}>
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveView(option.id, 1)}
+                          disabled={!isVisible || viewIndex === config.visibleViews.length - 1}
+                        >
+                          ↓
+                        </button>
+                      </div>
+                    </div>
+
+                    <label className="mini-field">
+                      <span>{option.label} title</span>
+                      <input
+                        value={viewSetting.title}
+                        onChange={(event) => updateViewSetting(option.id, { title: event.target.value })}
+                      />
+                    </label>
+
+                    <div className="view-card-controls">
+                      <label className="mini-field">
+                        <span>Chart</span>
+                        <select
+                          value={viewSetting.chartType}
+                          onChange={(event) =>
+                            updateViewSetting(option.id, {
+                              chartType: event.target.value as ChartVisualType,
+                            })
+                          }
+                        >
+                          <option value="area">Area</option>
+                          <option value="line">Line</option>
+                          <option value="bar">Bar</option>
+                          <option value="pie">Pie</option>
+                          <option value="donut">Donut</option>
+                        </select>
+                      </label>
+
+                      <ColorField
+                        compact
+                        label="Color"
+                        value={viewSetting.accentColor}
+                        onChange={(accentColor) => updateViewSetting(option.id, { accentColor })}
+                      />
+                    </div>
+
+                    <small>{option.description}</small>
+                  </article>
+                );
+              })}
             </div>
 
             <div className="builder-controls">
@@ -313,6 +475,25 @@ export default function App({ title = "Workbook Dashboard" }: AppProps) {
   );
 }
 
+function ColorField({
+  compact = false,
+  label,
+  value,
+  onChange,
+}: {
+  compact?: boolean;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className={compact ? "mini-field color-field" : "field-selector color-field"}>
+      <span>{label}</span>
+      <input type="color" value={value} onChange={(event) => onChange(event.target.value)} />
+    </label>
+  );
+}
+
 const DEFAULT_VISIBLE_VIEWS: DashboardViewId[] = [
   "health",
   "trend",
@@ -339,6 +520,24 @@ const DASHBOARD_VIEW_OPTIONS: Array<{
   { id: "preview", label: "Preview", description: "Raw rows for validation" },
 ];
 
+const DEFAULT_THEME = {
+  accentColor: "#4f46e5",
+  comparisonColor: "#06b6d4",
+  panelColor: "#ffffff",
+};
+
+const DEFAULT_VIEW_SETTINGS = {
+  health: { title: "Health + Insights", accentColor: "#4f46e5", chartType: "donut" as ChartVisualType },
+  trend: { title: "Trend Velocity", accentColor: "#4f46e5", chartType: "area" as ChartVisualType },
+  categoryBar: { title: "Top Categories", accentColor: "#6366f1", chartType: "bar" as ChartVisualType },
+  categoryPie: { title: "Category Share", accentColor: "#06b6d4", chartType: "donut" as ChartVisualType },
+  measure: { title: "Measure Profile", accentColor: "#a855f7", chartType: "bar" as ChartVisualType },
+  columns: { title: "Column Intelligence", accentColor: "#10b981", chartType: "bar" as ChartVisualType },
+  quality: { title: "Data Quality", accentColor: "#f59e0b", chartType: "bar" as ChartVisualType },
+  preview: { title: "Data Preview", accentColor: "#64748b", chartType: "bar" as ChartVisualType },
+};
+
+
 function createDefaultConfig(dataset: WorkbookDataset): DashboardConfig {
   const firstMeasure = dataset.columns.find((column) => column.type === "number");
   const firstDate = dataset.columns.find((column) => column.type === "date");
@@ -349,6 +548,10 @@ function createDefaultConfig(dataset: WorkbookDataset): DashboardConfig {
     dateIndex: firstDate?.index,
     categoryIndex: firstCategory?.index,
     aggregation: firstMeasure ? "sum" : "count",
+    dashboardTitle: "Workbook Command Center",
+    dashboardSubtitle: `${dataset.rows.length} rows from ${dataset.sourceAddress}`,
+    theme: DEFAULT_THEME,
+    viewSettings: DEFAULT_VIEW_SETTINGS,
     visibleViews: DEFAULT_VISIBLE_VIEWS,
     layout: "executive",
     categorySort: "valueDesc",
