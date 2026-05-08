@@ -4,6 +4,20 @@ export type SourceMode = "worksheet" | "selection";
 
 export type AggregationType = "sum" | "average" | "count";
 
+export type DashboardViewId =
+  | "health"
+  | "trend"
+  | "categoryBar"
+  | "categoryPie"
+  | "measure"
+  | "columns"
+  | "quality"
+  | "preview";
+
+export type DashboardLayout = "executive" | "analyst" | "compact";
+
+export type CategorySortMode = "valueDesc" | "valueAsc" | "nameAsc" | "shareDesc";
+
 export interface DataColumn {
   name: string;
   index: number;
@@ -26,6 +40,11 @@ export interface DashboardConfig {
   categoryIndex?: number;
   dateIndex?: number;
   aggregation: AggregationType;
+  visibleViews: DashboardViewId[];
+  layout: DashboardLayout;
+  categorySort: CategorySortMode;
+  categoryLimit: number;
+  previewRowCount: number;
 }
 
 export interface Kpi {

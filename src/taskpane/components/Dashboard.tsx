@@ -14,21 +14,99 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ChartPoint, DashboardModel, WorkbookDataset } from "../types/dashboard";
+import {
+  ChartPoint,
+  DashboardConfig,
+  DashboardLayout,
+  DashboardModel,
+  DashboardViewId,
+  WorkbookDataset,
+} from "../types/dashboard";
 import { KpiCard } from "./KpiCard";
 
 interface DashboardProps {
+  config: DashboardConfig;
   dataset: WorkbookDataset;
   model: DashboardModel;
 }
 
 const CATEGORY_COLORS = ["#6366f1", "#06b6d4", "#22c55e", "#f59e0b", "#ef4444", "#a855f7"];
 
-export function Dashboard({ dataset, model }: DashboardProps) {
-  const pieData = model.categoryData.slice(0, 6);
+const VIEW_ORDER: Record<DashboardLayout, DashboardViewId[]> = {
+  executive: ["health", "trend", "categoryBar", "categoryPie", "measure", "columns", "quality", "preview"],
+  analyst: ["trend", "categoryBar", "measure", "columns", "categoryPie", "quality", "preview", "health"],
+  compact: ["health", "trend", "categoryBar", "preview", "categoryPie", "measure", "columns", "quality"],
+};
+
+export function Dashboard({ config, dataset, model }: DashboardProps) {
+  const visibleViews = new Set(config.visibleViews);
+  const orderedViews = VIEW_ORDER[config.layout].filter((viewId) => visibleViews.has(viewId));
 
   return (
-    <section className="dashboard">
+    <section className={`dashboard dashboard-${config.layout}`}>
+      <DashboardBlueprint config={config} visibleCount={orderedViews.length} />
+
+      <section className="dashboard-mosaic">
+        {orderedViews.map((viewId) => renderDashboardView(viewId, dataset, model))}
+      </section>
+    </section>
+  );
+}
+
+function DashboardBlueprint({ config, visibleCount }: { config: DashboardConfig; visibleCount: number }) {
+  return (
+    <section className="blueprint-strip">
+      <div>
+        <p className="eyebrow">Live report recipe</p>
+        <h2>{formatLayout(config.layout)} layout</h2>
+        <p>
+          {visibleCount} active view(s) · {formatCategorySort(config.categorySort)} · {config.categoryLimit} category group(s) · {config.previewRowCount} preview row(s)
+        </p>
+      </div>
+      <div className="blueprint-pills" aria-label="Active dashboard recipe">
+        {config.visibleViews.map((viewId) => (
+          <span key={viewId}>{formatViewName(viewId)}</span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function renderDashboardView(viewId: DashboardViewId, dataset: WorkbookDataset, model: DashboardModel) {
+  if (viewId === "health") {
+    return <HealthView key={viewId} model={model} />;
+  }
+
+  if (viewId === "trend") {
+    return <TrendView key={viewId} model={model} />;
+  }
+
+  if (viewId === "categoryBar") {
+    return <CategoryBarView key={viewId} model={model} />;
+  }
+
+  if (viewId === "categoryPie") {
+    return <CategoryPieView key={viewId} model={model} />;
+  }
+
+  if (viewId === "measure") {
+    return <MeasureView key={viewId} model={model} />;
+  }
+
+  if (viewId === "columns") {
+    return <ColumnsView key={viewId} model={model} />;
+  }
+
+  if (viewId === "quality") {
+    return <QualityView key={viewId} model={model} />;
+  }
+
+  return <PreviewView key={viewId} dataset={dataset} model={model} />;
+}
+
+function HealthView({ model }: { model: DashboardModel }) {
+  return (
+    <section className="dashboard-view dashboard-view-wide">
       <section className="kpi-grid">
         {model.kpis.map((kpi) => (
           <KpiCard key={kpi.label} kpi={kpi} />
@@ -65,177 +143,223 @@ export function Dashboard({ dataset, model }: DashboardProps) {
           </div>
         </article>
       </section>
+    </section>
+  );
+}
 
-      {model.trendData.length > 0 && (
-        <section className="panel chart-panel chart-panel-large">
-          <div className="panel-header">
+function TrendView({ model }: { model: DashboardModel }) {
+  if (model.trendData.length === 0) {
+    return <UnavailableView title="Trend Velocity" detail="Select a date field and measure to activate the trend chart." />;
+  }
+
+  return (
+    <section className="panel chart-panel chart-panel-large dashboard-view dashboard-view-wide">
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">Temporal performance</p>
+          <h2>Trend Velocity</h2>
+        </div>
+        <span>{model.trendData.length} point(s)</span>
+      </div>
+
+      <ResponsiveContainer width="100%" height={280}>
+        <AreaChart data={model.trendData} margin={{ top: 10, right: 12, left: 0, bottom: 8 }}>
+          <defs>
+            <linearGradient id="valueGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.35} />
+              <stop offset="95%" stopColor="#6366f1" stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="date" minTickGap={24} stroke="#64748b" />
+          <YAxis stroke="#64748b" />
+          <Tooltip content={<DashboardTooltip />} />
+          <Area type="monotone" dataKey="value" stroke="#4f46e5" strokeWidth={3} fill="url(#valueGradient)" />
+          <Line type="monotone" dataKey="comparison" dot={false} stroke="#06b6d4" strokeDasharray="5 5" />
+        </AreaChart>
+      </ResponsiveContainer>
+    </section>
+  );
+}
+
+function CategoryBarView({ model }: { model: DashboardModel }) {
+  if (model.categoryData.length === 0) {
+    return <UnavailableView title="Top Categories" detail="Select a category field to activate grouped charts." />;
+  }
+
+  return (
+    <section className="panel chart-panel dashboard-view">
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">Ranked contribution</p>
+          <h2>Top Categories</h2>
+        </div>
+        <span>{model.categoryData.length} group(s)</span>
+      </div>
+
+      <ResponsiveContainer width="100%" height={260}>
+        <BarChart data={model.categoryData} margin={{ top: 10, right: 12, left: 0, bottom: 35 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="name" angle={-30} textAnchor="end" interval={0} height={70} stroke="#64748b" />
+          <YAxis stroke="#64748b" />
+          <Tooltip content={<DashboardTooltip />} />
+          <Bar dataKey="value" radius={[8, 8, 0, 0]} fill="#6366f1" />
+        </BarChart>
+      </ResponsiveContainer>
+    </section>
+  );
+}
+
+function CategoryPieView({ model }: { model: DashboardModel }) {
+  const pieData = model.categoryData.slice(0, 6);
+
+  if (pieData.length === 0) {
+    return <UnavailableView title="Category Share" detail="Select a category field to activate the mix chart." />;
+  }
+
+  return (
+    <section className="panel chart-panel dashboard-view">
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">Portfolio mix</p>
+          <h2>Category Share</h2>
+        </div>
+        <span>{pieData.length} slice(s)</span>
+      </div>
+
+      <ResponsiveContainer width="100%" height={260}>
+        <PieChart>
+          <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={3}>
+            {pieData.map((entry, index) => (
+              <Cell key={entry.name} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
+            ))}
+          </Pie>
+          <Tooltip content={<DashboardTooltip />} />
+        </PieChart>
+      </ResponsiveContainer>
+    </section>
+  );
+}
+
+function MeasureView({ model }: { model: DashboardModel }) {
+  if (!model.measureSummary) {
+    return <UnavailableView title="Measure Profile" detail="Select a numeric measure to activate distribution stats." />;
+  }
+
+  return (
+    <section className="panel dashboard-view dashboard-view-wide">
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">Distribution analysis</p>
+          <h2>{model.measureSummary.name} Profile</h2>
+        </div>
+      </div>
+
+      <div className="summary-strip">
+        <MetricPill label="Minimum" value={model.measureSummary.min} />
+        <MetricPill label="Average" value={model.measureSummary.average} />
+        <MetricPill label="Median" value={model.measureSummary.median} />
+        <MetricPill label="Maximum" value={model.measureSummary.max} />
+        <MetricPill label="Std. Dev." value={model.measureSummary.standardDeviation} />
+      </div>
+    </section>
+  );
+}
+
+function ColumnsView({ model }: { model: DashboardModel }) {
+  return (
+    <section className="panel dashboard-view dashboard-view-wide">
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">Schema map</p>
+          <h2>Column Intelligence</h2>
+        </div>
+        <span>First {model.columnProfiles.length} fields</span>
+      </div>
+
+      <div className="profile-list">
+        {model.columnProfiles.map((profile) => (
+          <article className="profile-row" key={`${profile.name}-${profile.type}`}>
             <div>
-              <p className="eyebrow">Temporal performance</p>
-              <h2>Trend Velocity</h2>
+              <strong>{profile.name}</strong>
+              <span>{profile.type} · {profile.uniqueCount} unique · {profile.missingCount} blank</span>
             </div>
-            <span>{model.trendData.length} point(s)</span>
-          </div>
-
-          <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={model.trendData} margin={{ top: 10, right: 12, left: 0, bottom: 8 }}>
-              <defs>
-                <linearGradient id="valueGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.35} />
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="date" minTickGap={24} stroke="#64748b" />
-              <YAxis stroke="#64748b" />
-              <Tooltip content={<DashboardTooltip />} />
-              <Area type="monotone" dataKey="value" stroke="#4f46e5" strokeWidth={3} fill="url(#valueGradient)" />
-              <Line type="monotone" dataKey="comparison" dot={false} stroke="#06b6d4" strokeDasharray="5 5" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </section>
-      )}
-
-      <section className="dashboard-grid-two">
-        {model.categoryData.length > 0 && (
-          <section className="panel chart-panel">
-            <div className="panel-header">
-              <div>
-                <p className="eyebrow">Ranked contribution</p>
-                <h2>Top Categories</h2>
-              </div>
-              <span>Top {model.categoryData.length}</span>
+            <div className="progress-track" aria-label={`${profile.completeness}% complete`}>
+              <span style={{ width: `${profile.completeness}%` }} />
             </div>
+            <b>{profile.completeness}%</b>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
 
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={model.categoryData} margin={{ top: 10, right: 12, left: 0, bottom: 35 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="name" angle={-30} textAnchor="end" interval={0} height={70} stroke="#64748b" />
-                <YAxis stroke="#64748b" />
-                <Tooltip content={<DashboardTooltip />} />
-                <Bar dataKey="value" radius={[8, 8, 0, 0]} fill="#6366f1" />
-              </BarChart>
-            </ResponsiveContainer>
-          </section>
-        )}
-
-        {pieData.length > 0 && (
-          <section className="panel chart-panel">
-            <div className="panel-header">
-              <div>
-                <p className="eyebrow">Portfolio mix</p>
-                <h2>Category Share</h2>
-              </div>
-              <span>{pieData.length} slice(s)</span>
-            </div>
-
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={3}>
-                  {pieData.map((entry, index) => (
-                    <Cell key={entry.name} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip content={<DashboardTooltip />} />
-              </PieChart>
-            </ResponsiveContainer>
-          </section>
-        )}
-      </section>
-
-      {model.measureSummary && (
-        <section className="panel">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">Distribution analysis</p>
-              <h2>{model.measureSummary.name} Profile</h2>
-            </div>
-          </div>
-
-          <div className="summary-strip">
-            <MetricPill label="Minimum" value={model.measureSummary.min} />
-            <MetricPill label="Average" value={model.measureSummary.average} />
-            <MetricPill label="Median" value={model.measureSummary.median} />
-            <MetricPill label="Maximum" value={model.measureSummary.max} />
-            <MetricPill label="Std. Dev." value={model.measureSummary.standardDeviation} />
-          </div>
-        </section>
-      )}
-
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Schema map</p>
-            <h2>Column Intelligence</h2>
-          </div>
-          <span>First {model.columnProfiles.length} fields</span>
+function QualityView({ model }: { model: DashboardModel }) {
+  return (
+    <section className="panel dashboard-view">
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">Trust checks</p>
+          <h2>Data Quality</h2>
         </div>
+      </div>
 
-        <div className="profile-list">
-          {model.columnProfiles.map((profile) => (
-            <article className="profile-row" key={`${profile.name}-${profile.type}`}>
-              <div>
-                <strong>{profile.name}</strong>
-                <span>{profile.type} · {profile.uniqueCount} unique · {profile.missingCount} blank</span>
-              </div>
-              <div className="progress-track" aria-label={`${profile.completeness}% complete`}>
-                <span style={{ width: `${profile.completeness}%` }} />
-              </div>
-              <b>{profile.completeness}%</b>
-            </article>
-          ))}
+      <ul className="quality-list">
+        {model.dataQualityMessages.map((message) => (
+          <li key={message}>{message}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function PreviewView({ dataset, model }: { dataset: WorkbookDataset; model: DashboardModel }) {
+  return (
+    <section className="panel dashboard-view dashboard-view-wide">
+      <div className="panel-header">
+        <div>
+          <p className="eyebrow">Raw evidence</p>
+          <h2>Data Preview</h2>
         </div>
-      </section>
+        <span>First {model.previewRows.length} rows</span>
+      </div>
 
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Trust checks</p>
-            <h2>Data Quality</h2>
-          </div>
-        </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              {dataset.headers.slice(0, 6).map((header, index) => (
+                <th key={`${header}-${index}`}>{header}</th>
+              ))}
+            </tr>
+          </thead>
 
-        <ul className="quality-list">
-          {model.dataQualityMessages.map((message) => (
-            <li key={message}>{message}</li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">Raw evidence</p>
-            <h2>Data Preview</h2>
-          </div>
-          <span>First {model.previewRows.length} rows</span>
-        </div>
-
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                {dataset.headers.slice(0, 6).map((header, index) => (
-                  <th key={`${header}-${index}`}>{header}</th>
+          <tbody>
+            {model.previewRows.map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                {dataset.headers.slice(0, 6).map((_, columnIndex) => (
+                  <td key={columnIndex}>{formatCell(row[columnIndex])}</td>
                 ))}
               </tr>
-            </thead>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-            <tbody>
-              {model.previewRows.map((row, rowIndex) => (
-                <tr key={rowIndex}>
-                  {dataset.headers.slice(0, 6).map((_, columnIndex) => (
-                    <td key={columnIndex}>{formatCell(row[columnIndex])}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {dataset.headers.length > 6 && (
+        <p className="muted">Showing first 6 of {dataset.headers.length} columns.</p>
+      )}
+    </section>
+  );
+}
 
-        {dataset.headers.length > 6 && (
-          <p className="muted">Showing first 6 of {dataset.headers.length} columns.</p>
-        )}
-      </section>
+function UnavailableView({ title, detail }: { title: string; detail: string }) {
+  return (
+    <section className="panel dashboard-view unavailable-view">
+      <p className="eyebrow">Awaiting fields</p>
+      <h2>{title}</h2>
+      <p>{detail}</p>
     </section>
   );
 }
@@ -267,6 +391,50 @@ function MetricPill({ label, value }: { label: string; value: number }) {
       <strong>{formatCell(value)}</strong>
     </div>
   );
+}
+
+function formatLayout(layout: DashboardLayout): string {
+  if (layout === "analyst") {
+    return "Analyst deep dive";
+  }
+
+  if (layout === "compact") {
+    return "Compact board";
+  }
+
+  return "Executive story";
+}
+
+function formatCategorySort(sortMode: string): string {
+  if (sortMode === "valueAsc") {
+    return "lowest values first";
+  }
+
+  if (sortMode === "nameAsc") {
+    return "A to Z grouping";
+  }
+
+  if (sortMode === "shareDesc") {
+    return "largest share first";
+  }
+
+  return "highest values first";
+}
+
+function formatViewName(viewId: DashboardViewId): string {
+  if (viewId === "categoryBar") {
+    return "Category bars";
+  }
+
+  if (viewId === "categoryPie") {
+    return "Category share";
+  }
+
+  if (viewId === "health") {
+    return "Health";
+  }
+
+  return viewId.charAt(0).toUpperCase() + viewId.slice(1);
 }
 
 function formatCell(value: unknown): string {

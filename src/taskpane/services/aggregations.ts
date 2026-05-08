@@ -1,5 +1,6 @@
 import {
   AggregationType,
+  CategorySortMode,
   ChartPoint,
   ColumnProfile,
   DashboardConfig,
@@ -93,7 +94,14 @@ export function buildDashboardModel(
 
   const categoryData =
     categoryColumn && (measureColumn || config.aggregation === "count")
-      ? aggregateByCategory(dataset, categoryColumn.index, measureColumn?.index, config.aggregation)
+      ? aggregateByCategory(
+          dataset,
+          categoryColumn.index,
+          measureColumn?.index,
+          config.aggregation,
+          config.categorySort,
+          config.categoryLimit
+        )
       : [];
 
   const dataQualityMessages = buildDataQualityMessages(
@@ -108,7 +116,7 @@ export function buildDashboardModel(
     trendData,
     categoryData,
     dataQualityMessages,
-    previewRows: dataset.rows.slice(0, 8),
+    previewRows: dataset.rows.slice(0, config.previewRowCount),
     insights: buildInsights(dataset, trendData, categoryData, qualityScore, measureSummary),
     columnProfiles: buildColumnProfiles(dataset),
     qualityScore,
@@ -120,7 +128,9 @@ function aggregateByCategory(
   dataset: WorkbookDataset,
   categoryIndex: number,
   measureIndex: number | undefined,
-  aggregation: AggregationType
+  aggregation: AggregationType,
+  sortMode: CategorySortMode,
+  limit: number
 ): ChartPoint[] {
   const buckets = new Map<string, Bucket>();
 
@@ -152,8 +162,24 @@ function aggregateByCategory(
       ...point,
       share: totalValue > 0 ? roundNumber((point.value / totalValue) * 100) : 0,
     }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 10);
+    .sort((a, b) => sortCategoryPoints(a, b, sortMode))
+    .slice(0, limit);
+}
+
+function sortCategoryPoints(a: ChartPoint, b: ChartPoint, sortMode: CategorySortMode): number {
+  if (sortMode === "valueAsc") {
+    return a.value - b.value;
+  }
+
+  if (sortMode === "nameAsc") {
+    return String(a.name).localeCompare(String(b.name));
+  }
+
+  if (sortMode === "shareDesc") {
+    return (b.share ?? 0) - (a.share ?? 0);
+  }
+
+  return b.value - a.value;
 }
 
 function aggregateByDate(
