@@ -9,6 +9,7 @@ import {
   DashboardLayout,
   DashboardViewId,
   SourceMode,
+  TextAlignment,
   WorkbookDataset,
 } from "../types/dashboard";
 import { Dashboard } from "./Dashboard";
@@ -26,7 +27,7 @@ export default function App({ title = "Workbook Dashboard" }: AppProps) {
     dashboardSubtitle: "A customizable workbook intelligence board built from the active Excel data.",
     theme: DEFAULT_THEME,
     viewSettings: DEFAULT_VIEW_SETTINGS,
-    visibleViews: DEFAULT_VISIBLE_VIEWS,
+    visibleViews: [],
     layout: "executive",
     categorySort: "valueDesc",
     categoryLimit: 10,
@@ -77,16 +78,46 @@ export default function App({ title = "Workbook Dashboard" }: AppProps) {
   }
 
   function toggleView(viewId: DashboardViewId) {
-    setConfig((current) => {
-      const visibleViews = current.visibleViews.includes(viewId)
+    setConfig((current) => ({
+      ...current,
+      visibleViews: current.visibleViews.includes(viewId)
         ? current.visibleViews.filter((item) => item !== viewId)
-        : [...current.visibleViews, viewId];
+        : [...current.visibleViews, viewId],
+    }));
+  }
+
+  function reorderViews(draggedViewId: DashboardViewId, targetViewId: DashboardViewId) {
+    setConfig((current) => {
+      const draggedIndex = current.visibleViews.indexOf(draggedViewId);
+      const targetIndex = current.visibleViews.indexOf(targetViewId);
+
+      if (draggedIndex < 0 || targetIndex < 0 || draggedIndex === targetIndex) {
+        return current;
+      }
+
+      const visibleViews = [...current.visibleViews];
+      const [draggedView] = visibleViews.splice(draggedIndex, 1);
+      visibleViews.splice(targetIndex, 0, draggedView);
 
       return {
         ...current,
-        visibleViews: visibleViews.length > 0 ? visibleViews : current.visibleViews,
+        visibleViews,
       };
     });
+  }
+
+  function clearCanvas() {
+    setConfig((current) => ({
+      ...current,
+      visibleViews: [],
+    }));
+  }
+
+  function addStarterCanvas() {
+    setConfig((current) => ({
+      ...current,
+      visibleViews: DEFAULT_VISIBLE_VIEWS,
+    }));
   }
 
   function moveView(viewId: DashboardViewId, direction: -1 | 1) {
@@ -322,12 +353,20 @@ export default function App({ title = "Workbook Dashboard" }: AppProps) {
               <p className="eyebrow">Dashboard builder</p>
               <h2>Choose the story and layout</h2>
               <p>
-                Turn views on or off, pick a presentation mode, and organize category data like a
-                lightweight Power BI or Smartsheet report.
+                Start with a blank canvas, add only the widgets you want, then drag cards on the
+                report canvas to place them exactly where you want.
               </p>
+              <div className="canvas-action-row">
+                <button className="secondary-button canvas-clear-button" type="button" onClick={addStarterCanvas}>
+                  Add starter dashboard
+                </button>
+                <button className="secondary-button canvas-clear-button" type="button" onClick={clearCanvas}>
+                  Clear canvas
+                </button>
+              </div>
             </div>
 
-            <div className="view-picker view-builder-list" aria-label="Dashboard views">
+            <div className="view-picker view-builder-list" aria-label="Widget library">
               {DASHBOARD_VIEW_OPTIONS.map((option) => {
                 const viewIndex = config.visibleViews.indexOf(option.id);
                 const isVisible = visibleViewSet.has(option.id);
@@ -341,7 +380,7 @@ export default function App({ title = "Workbook Dashboard" }: AppProps) {
                         onClick={() => toggleView(option.id)}
                         aria-pressed={isVisible}
                       >
-                        {isVisible ? "Visible" : "Hidden"}
+                        {isVisible ? "Remove" : "Add widget"}
                       </button>
                       <div className="move-buttons" aria-label={`Move ${option.label}`}>
                         <button type="button" onClick={() => moveView(option.id, -1)} disabled={!isVisible || viewIndex <= 0}>
@@ -381,6 +420,22 @@ export default function App({ title = "Workbook Dashboard" }: AppProps) {
                           <option value="bar">Bar</option>
                           <option value="pie">Pie</option>
                           <option value="donut">Donut</option>
+                        </select>
+                      </label>
+
+                      <label className="mini-field">
+                        <span>Align</span>
+                        <select
+                          value={viewSetting.textAlign}
+                          onChange={(event) =>
+                            updateViewSetting(option.id, {
+                              textAlign: event.target.value as TextAlignment,
+                            })
+                          }
+                        >
+                          <option value="left">Left</option>
+                          <option value="center">Center</option>
+                          <option value="right">Right</option>
                         </select>
                       </label>
 
@@ -468,7 +523,14 @@ export default function App({ title = "Workbook Dashboard" }: AppProps) {
             </div>
           </section>
 
-          {dashboardModel && <Dashboard config={config} dataset={dataset} model={dashboardModel} />}
+          {dashboardModel && (
+            <Dashboard
+              config={config}
+              dataset={dataset}
+              model={dashboardModel}
+              onReorderViews={reorderViews}
+            />
+          )}
         </>
       )}
     </main>
@@ -527,14 +589,14 @@ const DEFAULT_THEME = {
 };
 
 const DEFAULT_VIEW_SETTINGS = {
-  health: { title: "Health + Insights", accentColor: "#4f46e5", chartType: "donut" as ChartVisualType },
-  trend: { title: "Trend Velocity", accentColor: "#4f46e5", chartType: "area" as ChartVisualType },
-  categoryBar: { title: "Top Categories", accentColor: "#6366f1", chartType: "bar" as ChartVisualType },
-  categoryPie: { title: "Category Share", accentColor: "#06b6d4", chartType: "donut" as ChartVisualType },
-  measure: { title: "Measure Profile", accentColor: "#a855f7", chartType: "bar" as ChartVisualType },
-  columns: { title: "Column Intelligence", accentColor: "#10b981", chartType: "bar" as ChartVisualType },
-  quality: { title: "Data Quality", accentColor: "#f59e0b", chartType: "bar" as ChartVisualType },
-  preview: { title: "Data Preview", accentColor: "#64748b", chartType: "bar" as ChartVisualType },
+  health: { title: "Health + Insights", accentColor: "#4f46e5", chartType: "donut" as ChartVisualType, textAlign: "left" as TextAlignment },
+  trend: { title: "Trend Velocity", accentColor: "#4f46e5", chartType: "area" as ChartVisualType, textAlign: "left" as TextAlignment },
+  categoryBar: { title: "Top Categories", accentColor: "#6366f1", chartType: "bar" as ChartVisualType, textAlign: "left" as TextAlignment },
+  categoryPie: { title: "Category Share", accentColor: "#06b6d4", chartType: "donut" as ChartVisualType, textAlign: "left" as TextAlignment },
+  measure: { title: "Measure Profile", accentColor: "#a855f7", chartType: "bar" as ChartVisualType, textAlign: "left" as TextAlignment },
+  columns: { title: "Column Intelligence", accentColor: "#10b981", chartType: "bar" as ChartVisualType, textAlign: "left" as TextAlignment },
+  quality: { title: "Data Quality", accentColor: "#f59e0b", chartType: "bar" as ChartVisualType, textAlign: "left" as TextAlignment },
+  preview: { title: "Data Preview", accentColor: "#64748b", chartType: "bar" as ChartVisualType, textAlign: "left" as TextAlignment },
 };
 
 
@@ -552,7 +614,7 @@ function createDefaultConfig(dataset: WorkbookDataset): DashboardConfig {
     dashboardSubtitle: `${dataset.rows.length} rows from ${dataset.sourceAddress}`,
     theme: DEFAULT_THEME,
     viewSettings: DEFAULT_VIEW_SETTINGS,
-    visibleViews: DEFAULT_VISIBLE_VIEWS,
+    visibleViews: [],
     layout: "executive",
     categorySort: "valueDesc",
     categoryLimit: 10,

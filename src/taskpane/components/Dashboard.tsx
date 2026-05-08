@@ -30,11 +30,12 @@ interface DashboardProps {
   config: DashboardConfig;
   dataset: WorkbookDataset;
   model: DashboardModel;
+  onReorderViews: (draggedViewId: DashboardViewId, targetViewId: DashboardViewId) => void;
 }
 
 const CATEGORY_COLORS = ["#6366f1", "#06b6d4", "#22c55e", "#f59e0b", "#ef4444", "#a855f7"];
 
-export function Dashboard({ config, dataset, model }: DashboardProps) {
+export function Dashboard({ config, dataset, model, onReorderViews }: DashboardProps) {
   const dashboardStyle = {
     "--dashboard-accent": config.theme.accentColor,
     "--dashboard-comparison": config.theme.comparisonColor,
@@ -51,9 +52,35 @@ export function Dashboard({ config, dataset, model }: DashboardProps) {
         <p>{config.dashboardSubtitle}</p>
       </section>
 
-      <section className="dashboard-mosaic">
-        {config.visibleViews.map((viewId) => renderDashboardView(viewId, dataset, model, config))}
-      </section>
+      {config.visibleViews.length === 0 ? (
+        <section className="blank-canvas panel">
+          <p className="eyebrow">Blank canvas</p>
+          <h2>Add your first widget</h2>
+          <p>
+            Use the widget library above to add charts, KPIs, tables, quality checks, and text-aligned
+            sections. Once widgets appear here, drag and drop them to rearrange the report canvas.
+          </p>
+        </section>
+      ) : (
+        <section className="dashboard-mosaic">
+          {config.visibleViews.map((viewId) => (
+            <div
+              className="canvas-widget"
+              draggable
+              key={viewId}
+              onDragStart={(event) => event.dataTransfer.setData("text/plain", viewId)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                onReorderViews(event.dataTransfer.getData("text/plain") as DashboardViewId, viewId);
+              }}
+            >
+              <div className="drag-handle" aria-hidden="true">Drag to place · {config.viewSettings[viewId].title}</div>
+              {renderDashboardView(viewId, dataset, model, config)}
+            </div>
+          ))}
+        </section>
+      )}
     </section>
   );
 }
@@ -445,6 +472,7 @@ function ChartHeader({ eyebrow, meta, title }: { eyebrow: string; meta: string; 
 function viewStyle(settings: DashboardViewSettings): React.CSSProperties {
   return {
     "--view-accent": settings.accentColor,
+    textAlign: settings.textAlign,
   } as React.CSSProperties;
 }
 

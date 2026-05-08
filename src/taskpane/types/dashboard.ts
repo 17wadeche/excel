@@ -20,6 +20,8 @@ export type CategorySortMode = "valueDesc" | "valueAsc" | "nameAsc" | "shareDesc
 
 export type ChartVisualType = "area" | "line" | "bar" | "pie" | "donut";
 
+export type TextAlignment = "left" | "center" | "right";
+
 export interface DashboardTheme {
   accentColor: string;
   comparisonColor: string;
@@ -30,6 +32,7 @@ export interface DashboardViewSettings {
   title: string;
   accentColor: string;
   chartType: ChartVisualType;
+  textAlign: TextAlignment;
 }
 
 export interface DataColumn {
