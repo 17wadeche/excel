@@ -1,24 +1,29 @@
-import * as React from "react";
-import { createRoot } from "react-dom/client";
-import { FluentProvider, webLightTheme } from "@fluentui/react-components";
-import App from "./components/App";
+// src/taskpane/index.tsx
 
-/* global document, Office */
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
+import { DashboardProvider } from './context/DashboardContext';
+import App from './components/App';
+import './taskpane.css';
 
-const title = "Workbook Dashboard";
-
-const rootElement = document.getElementById("container");
-
-if (!rootElement) {
-  throw new Error("Could not find root element with id 'container'.");
-}
-
-const root = createRoot(rootElement);
+declare const Office: any;
 
 Office.onReady(() => {
+  const container = document.getElementById('container');
+
+  if (!container) {
+    throw new Error("Failed to find the root element.");
+  }
+
+  const root = ReactDOM.createRoot(container);
   root.render(
-    <FluentProvider theme={webLightTheme}>
-      <App title={title} />
-    </FluentProvider>
+    <React.StrictMode>
+      <MemoryRouter>
+        <DashboardProvider>
+          <App />
+        </DashboardProvider>
+      </MemoryRouter>
+    </React.StrictMode>
   );
 });

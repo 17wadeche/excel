@@ -1,564 +1,816 @@
-import * as React from "react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
-  ChartPoint,
-  DashboardConfig,
-  DashboardLayout,
-  DashboardModel,
-  DashboardViewId,
-  DashboardViewSettings,
-  WorkbookDataset,
-} from "../types/dashboard";
-import { KpiCard } from "./KpiCard";
+// src/taskpane/components/Dashboard.tsx
+
+import React, { useState, useEffect, useRef, useContext } from 'react';
+import * as ReactGridLayout from 'react-grid-layout';
+import { Modal, Card, Button, Input, Tooltip, message } from 'antd';
+import EditWidgetForm from './EditWidgetForm';
+import MetricWidget from './widgets/MetricWidget';
+import { BREAKPOINTS, GRID_COLS, WIDGET_SIZES } from './layoutConstants';
+import { isEqual } from 'lodash';
+import LineSettingsModal from './LineSettingsModal';
+import TitleWidgetComponent from './TitleWidget';
+import { ReloadOutlined, CloseOutlined, EditOutlined, UndoOutlined, FundProjectionScreenOutlined, RedoOutlined, FullscreenOutlined, FullscreenExitOutlined, CopyOutlined, SaveOutlined, FileAddOutlined, ZoomInOutlined, ZoomOutOutlined, MenuOutlined } from '@ant-design/icons';
+import './Dashboard.css';
+import { DashboardContext } from '../context/DashboardContext';
+import { Widget, ChartData, TextData, ImageWidgetData, ReportData, GridLayoutItem, ReportWidgetType, DashboardBorderSettings , LineWidgetData, TitleWidget, TitleWidgetData, GanttWidgetData, MetricData, DashboardItem } from './types';
+import TextWidget from './widgets/TextWidget';
+import SalesChart from './widgets/SalesChart';
+import GanttChartComponent from './widgets/GanttChart';
+import ImageWidget from './widgets/ImageWidget';
+import ReportWidget from './widgets/ReportWidget';
+import './themes.css';
+import { v4 as uuidv4 } from 'uuid';
+import 'react-grid-layout/css/styles.css';
+import 'react-resizable/css/styles.css';
+import Draggable from 'react-draggable';
+import LineWidget from './widgets/LineWidget';
+import html2canvas from 'html2canvas';
+import PresentationDashboard from './PresentationDashboard';
+const RGL = ReactGridLayout as any;
+
+const WidthProvider = RGL.WidthProvider || RGL.default;
+const Responsive = RGL.Responsive;
+
+const ResponsiveGridLayout = WidthProvider(
+  Responsive
+) as React.ComponentType<any>;
+
+const defaultTitleWidget: Widget = {
+  id: 'dashboard-title',
+  type: 'title',
+  data: {
+    content: 'Your Dashboard Title',
+    fontSize: 24,
+    textColor: '#000000',
+    backgroundColor: '#ffffff',
+    titleAlignment: 'center',
+  } as TitleWidgetData,
+};
 
 interface DashboardProps {
-  config: DashboardConfig;
-  dataset: WorkbookDataset;
-  model: DashboardModel;
-  onReorderViews: (draggedViewId: DashboardViewId, targetViewId: DashboardViewId) => void;
+  isPresenterMode?: boolean;
+  closePresenterMode?: () => void;
+  onEditWidget?: (widget: Widget) => void;
+  dashboardBorderSettings?: DashboardBorderSettings;
+  isFullScreen?: boolean;
 }
 
-const CATEGORY_COLORS = ["#6366f1", "#06b6d4", "#22c55e", "#f59e0b", "#ef4444", "#a855f7"];
+const Dashboard: React.FC<DashboardProps> = ({ isPresenterMode = false, closePresenterMode, isFullScreen }) => {
+  const { widgets, addWidget, removeWidget, updateWidget, refreshAllCharts, editDashboard, layouts, setLayouts, setWidgets, dashboards, setDashboardBorderSettings, updateLayoutsForNewWidgets, undo, dashboardBorderSettings, redo, canUndo, dashboardTitle, canRedo, currentTemplateId, currentDashboardId, saveTemplate, currentDashboard, currentWorkbookId, availableWorksheets } = useContext(DashboardContext)!;
+  const [isFullscreenActive, setIsFullscreenActive] = useState(false);
+  const isEditingEnabled = !isPresenterMode && !isFullscreenActive && !isFullScreen;
+  const [isVersionHistoryVisible, setIsVersionHistoryVisible] = useState(false);
+  const borderStyle: React.CSSProperties = dashboardBorderSettings?.showBorder
+    ? {
+        border: `${dashboardBorderSettings.thickness}px ${dashboardBorderSettings.style} ${dashboardBorderSettings.color}`,
+      }
+    : {};
+  const isUpdatingLayout = useRef(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isLineSettingsModalVisible, setIsLineSettingsModalVisible] = useState(false);
+  const [editingWidget, setEditingWidget] = useState<Widget | null>(null);
+  const isUpdatingFromItem = useRef(false);
+  const prevLayoutsRef = useRef<{ [key: string]: GridLayoutItem[] }>({});
+  const [isPresentationMode, setIsPresentationMode] = useState(false);
+  const isOfficeInitialized =
+    typeof Office !== 'undefined' &&
+    Office.context &&
+    Office.context.ui &&
+    typeof Office.context.ui.displayDialogAsync === 'function';
+  const handleRefresh = async () => {
+    if (isPresenterMode) {
+      return;
+    }
+    setIsRefreshing(true);
+    await refreshAllCharts();
+    setIsRefreshing(false);
+  };
 
-export function Dashboard({ config, dataset, model, onReorderViews }: DashboardProps) {
-  const dashboardStyle = {
-    "--dashboard-accent": config.theme.accentColor,
-    "--dashboard-comparison": config.theme.comparisonColor,
-    "--dashboard-panel": config.theme.panelColor,
-  } as React.CSSProperties;
+  const [fullScreenDialog, setFullScreenDialog] = useState<
+    Office.Dialog | null
+  >(null);
+
+  useEffect(() => {
+    if (isPresenterMode) {
+      return;
+    }
+    const layoutItemIds = new Set(
+      Object.values(layouts)
+        .flat()
+        .map((item) => item.i)
+    );
+    const widgetsWithoutLayout = widgets.filter((widget) => !layoutItemIds.has(widget.id));
+    if (widgetsWithoutLayout.length > 0) {
+      console.log('Adding layouts for new widgets:', widgetsWithoutLayout.map((w) => w.id));
+      updateLayoutsForNewWidgets(widgetsWithoutLayout);
+    }
+  }, [widgets]);
+
+  const handlePresentDashboard = async () => {
+    if (!dashboardRef.current) {
+      message.error('Dashboard container not found.');
+      return;
+    }
+    try {
+      const toolbar = document.querySelector('.fixed-vertical-toolbar') as HTMLElement | null;
+      if (toolbar) {
+        toolbar.style.display = 'none';
+      }
+  
+      // Save the original styles
+      const originalStyle = {
+        position: dashboardRef.current.style.position,
+        top: dashboardRef.current.style.top,
+        left: dashboardRef.current.style.left,
+        width: dashboardRef.current.style.width,
+        height: dashboardRef.current.style.height,
+        overflow: dashboardRef.current.style.overflow,
+        transform: dashboardRef.current.style.transform,
+        boxSizing: dashboardRef.current.style.boxSizing,
+        padding: dashboardRef.current.style.padding,
+      };
+  
+      // Set new styles to ensure full content is visible
+      dashboardRef.current.style.position = 'relative';
+      dashboardRef.current.style.top = '0px';
+      dashboardRef.current.style.left = '0px';
+      dashboardRef.current.style.width = `${dashboardRef.current.scrollWidth}px`;
+      dashboardRef.current.style.height = `${dashboardRef.current.scrollHeight}px`;
+      dashboardRef.current.style.overflow = 'visible';
+      dashboardRef.current.style.transform = 'none'; // Remove any transforms
+      dashboardRef.current.style.boxSizing = 'border-box'; // Include borders in size calculations
+      dashboardRef.current.style.padding = '0'; // Remove padding
+  
+      // Ensure the dashboard is at full opacity
+      dashboardRef.current.style.opacity = '1';
+  
+      // Wait for styles to take effect
+      await new Promise((resolve) => setTimeout(resolve, 100));
+  
+      // Recalculate dimensions after style change
+      const rect = dashboardRef.current.getBoundingClientRect();
+      const width = rect.width;
+      const height = rect.height;
+  
+      message.loading({ content: 'Capturing screenshot...', key: 'screenshot' });
+      await document.fonts.ready;
+  
+      const canvas = await html2canvas(dashboardRef.current, {
+        scale: window.devicePixelRatio || 1,
+        useCORS: true,
+        width: width,
+        height: height,
+        scrollX: -window.scrollX,
+        scrollY: -window.scrollY,
+      });
+  
+      const imgData = canvas.toDataURL('image/png');
+  
+      // Restore the original styles
+      Object.assign(dashboardRef.current.style, originalStyle);
+  
+      if (toolbar) {
+        toolbar.style.display = 'block';
+      }
+      if (Office && Office.context && Office.context.ui) {
+        const url = `${window.location.origin}/screenshot.html`;
+        Office.context.ui.displayDialogAsync(
+          url,
+          { height: 100, width: 100, displayInIframe: true },
+          (result) => {
+            if (result.status === Office.AsyncResultStatus.Failed) {
+              message.error('Failed to open presentation dialog.');
+            } else {
+              const dialog = result.value;
+              setFullScreenDialog(dialog);
+              dialog.addEventHandler(
+                Office.EventType.DialogMessageReceived,
+                (args) => {
+                  if ('message' in args) {
+                    try {
+                      const messageFromChild = JSON.parse(args.message);
+                      if (messageFromChild.type === 'requestImage') {
+                        dialog.messageChild(JSON.stringify({ type: 'imageData', data: imgData }));
+                      } else if (messageFromChild.type === 'close') {
+                        dialog.close();
+                      }
+                    } catch (parseError) {
+                      console.error('Failed to parse message from dialog:', parseError);
+                    }
+                  }
+                }
+              );
+            }
+          }
+        );
+      } else {
+        message.error('Office context is not available.');
+      }
+  
+      message.success({ content: 'Screenshot captured!', key: 'screenshot', duration: 2 });
+    } catch (error) {
+      console.error('Error capturing screenshot:', error);
+      message.error('Failed to capture screenshot.');
+    }
+  };
+
+  const handleExitPresentationMode = () => {
+    setIsPresentationMode(false);
+  };
+  
+  const handleDialogMessage = (args: Office.DialogParentMessageReceivedEventArgs) => {
+    const messageFromChild = JSON.parse(args.message);
+    if (isPresenterMode && messageFromChild.type === 'getDataFromRange') {
+      fullScreenDialog?.messageChild(JSON.stringify({
+        type: 'dataFromRangeError',
+        widgetId: messageFromChild.widgetId,
+        error: 'Data loading is disabled in full-screen mode.',
+      }));
+      return;
+    }
+    switch (messageFromChild.type) {
+      case 'getDataFromRange':
+        const { widgetId, worksheetName, associatedRange } = messageFromChild;
+        Excel.run(async (context) => {
+          try {
+            const sheet = context.workbook.worksheets.getItem(worksheetName);
+            const range = sheet.getRange(associatedRange);
+            range.load('values');
+            await context.sync();
+            const data = range.values;
+            fullScreenDialog?.messageChild(JSON.stringify({
+              type: 'dataFromRange',
+              widgetId: widgetId,
+              data: data,
+            }));
+          } catch (error: any) {
+            console.error('Error getting data from range:', error);
+            fullScreenDialog?.messageChild(JSON.stringify({
+              type: 'dataFromRangeError',
+              widgetId: widgetId,
+              error: error.message || error.toString(),
+            }));
+          }
+        });
+        break
+    }
+  };
+
+  useEffect(() => {
+    if (fullScreenDialog && !isUpdatingFromItem.current) {
+      const dashboardData = {
+        components: widgets,
+        layouts,
+        id: currentDashboardId,
+        title: dashboardTitle,
+        borderSettings: dashboardBorderSettings,
+      };
+      fullScreenDialog.messageChild(
+        JSON.stringify({
+          type: 'updateDashboardData',
+          dashboard: dashboardData,
+          currentWorkbookId,
+          availableWorksheets,
+        })
+      );
+    }
+  }, [widgets, layouts, dashboardBorderSettings]);
+
+  useEffect(() => {
+    if (
+      currentDashboard &&
+      currentDashboard.layouts &&
+      Object.keys(currentDashboard.layouts).length > 0
+    ) {
+      if (!isEqual(currentDashboard.layouts, prevLayoutsRef.current)) {
+        setLayouts(currentDashboard.layouts);
+        prevLayoutsRef.current = currentDashboard.layouts;
+      }
+    } else if (currentDashboard && (!currentDashboard.layouts || Object.keys(currentDashboard.layouts).length === 0)) {
+      updateLayoutsForNewWidgets(currentDashboard.components);
+    }
+  }, [currentDashboard]);
+
+  const [theme, setTheme] = useState('light-theme');
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [isScreenshotModalVisible, setIsScreenshotModalVisible] = useState(false);
+  const [screenshotImage, setScreenshotImage] = useState<string | null>(null);
+  const dashboardRef = useRef<HTMLDivElement>(null);
+  const handleSave = () => {
+    if (currentDashboardId) {
+      saveTemplate();
+      message.success('Dashboard saved successfully!');
+    } else {
+      message.warning('No dashboard is currently active.');
+    }
+  };
+
+  const handleLayoutChange = (
+    _currentLayout: GridLayoutItem[],
+    allLayouts: { [key: string]: GridLayoutItem[] }
+  ) => {
+    const syncedLayouts = { ...layouts };
+    BREAKPOINTS.forEach((bp) => {
+      if (!allLayouts[bp]) {
+        syncedLayouts[bp] = allLayouts.lg || allLayouts.md || [];
+      } else {
+        syncedLayouts[bp] = allLayouts[bp];
+      }
+    });
+    setLayouts(syncedLayouts);
+    if (!isEqual(allLayouts, prevLayoutsRef.current)) {
+      prevLayoutsRef.current = allLayouts;
+      if (currentDashboardId) {
+        const updatedDashboard: DashboardItem = {
+          ...dashboards.find((d) => d.id === currentDashboardId)!,
+          layouts: allLayouts,
+        };
+        editDashboard(updatedDashboard);
+        console.log('Layouts updated and saved immediately.');
+      }
+    }
+  };
+
+  const copyWidget = (widget: Widget) => {
+    const newWidget: Widget = {
+      ...widget,
+      id: `${widget.type}-${uuidv4()}`,
+    };
+    addWidget(widget.type, newWidget.data);
+    message.success('Widget copied!');
+  };
+
+  const handleRemoveWidget = (id: string) => {
+    const widgetToRemove = widgets.find((widget) => widget.id === id);
+    if (widgetToRemove?.type === 'title') {
+      message.warning('The title widget cannot be removed.');
+      return;
+    } else {
+      removeWidget(id);
+      message.info('Widget removed!');
+    }
+  };
+
+  useEffect(() => {
+    if (!layouts || Object.keys(layouts).length === 0) {
+      console.log('No layouts available. Skipping validation.');
+      return;
+    }
+    const areLayoutsValid = Object.values(layouts).every((layoutArray) =>
+      layoutArray.some((layoutItem) =>
+        widgets.some((widget) => widget.id === layoutItem.i)
+      )
+    );
+    if (!areLayoutsValid) {
+      console.log('Layouts are invalid or do not match widgets. Regenerating layouts.');
+      updateLayoutsForNewWidgets(widgets);
+    }
+  }, [widgets]);
+
+  const getLineStyle = (data: LineWidgetData): React.CSSProperties => {
+    const { color, thickness, style, orientation } = data;
+    const commonStyles = {
+      backgroundColor: color,
+      borderStyle: style,
+      borderColor: color,
+    };
+  
+    if (orientation === 'horizontal') {
+      return {
+        ...commonStyles,
+        height: thickness,
+        width: '100%',
+      };
+    } else {
+      return {
+        ...commonStyles,
+        width: thickness,
+        height: '100%',
+      };
+    }
+  };
+
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [currentWidget, setCurrentWidget] = useState<Widget | null>(null);
+
+  const handleEditWidget = (widget: Widget) => {
+    setEditingWidget(widget);
+    if (widget.type === 'line') {
+      setIsLineSettingsModalVisible(true);
+    } else {
+      setCurrentWidget(widget);
+      setIsModalVisible(true);
+    }
+  };
+
+  useEffect(() => {
+    console.log('Widgets:', widgets);
+    console.log('Layouts:', layouts);
+  }, [widgets, layouts]);
+
+  const handleLineSettingsSave = (updatedData: LineWidgetData) => {
+    if (editingWidget) {
+      updateWidget(editingWidget.id, updatedData);
+    }
+    setIsLineSettingsModalVisible(false);
+    setEditingWidget(null);
+  };
+
+  const handleLineSettingsCancel = () => {
+    setIsLineSettingsModalVisible(false);
+    setEditingWidget(null);
+  };
+
+  const handleModalCancel = () => {
+    setIsModalVisible(false);
+    setCurrentWidget(null);
+  };
+
+  const handleModalOk = (updatedData: any) => {
+    if (currentWidget) {
+      updateWidget(currentWidget.id, updatedData);
+    }
+    setIsModalVisible(false);
+    setCurrentWidget(null);
+  };
+
+  const zoomIn = () => setZoomLevel((prev) => Math.min(prev + 0.1, 2));
+  const zoomOut = () => setZoomLevel((prev) => Math.max(prev - 0.1, 0.5));
+  const resetZoom = () => setZoomLevel(1);
+  const openPresenterMode = () => {
+    if (isOfficeInitialized) {
+      const url = window.location.origin + '/fullScreenDashboard.html';
+      Office.context.ui.displayDialogAsync(
+        url,
+        { height: 99.5, width: 99.5, displayInIframe: true },
+        (result) => {
+          if (result.status === Office.AsyncResultStatus.Failed) {
+            message.error('Failed to open presenter mode.');
+          } else {
+            const dialog = result.value;
+            setFullScreenDialog(dialog);
+            dialog.addEventHandler(
+              Office.EventType.DialogMessageReceived,
+              (args: any) => {
+                const data = JSON.parse(args.message);
+                console.log('Received message from dialog:', data);
+                if (data.type === 'fullscreenActive') {
+                  setIsFullscreenActive(data.active);
+                } else if (data.type === 'requestState') {
+                  const dashboardData = {
+                    components: widgets,
+                    layouts,
+                    id: currentDashboardId,
+                    title: dashboardTitle,
+                    borderSettings: dashboardBorderSettings,
+                  };
+                  dialog.messageChild(
+                    JSON.stringify({
+                      type: 'initialState',
+                      dashboard: dashboardData,
+                      currentWorkbookId,
+                      availableWorksheets,
+                    })
+                  );
+                } else if (data.type === 'close') {
+                  dialog.close();
+                  setFullScreenDialog(null);
+                } else if (data.type === 'updateDashboardData') {
+                  isUpdatingFromItem.current = true;
+                  setWidgets(data.dashboard.components);
+                  setLayouts(data.dashboard.layouts);
+                  setDashboardBorderSettings(data.dashboard.borderSettings);
+                  isUpdatingFromItem.current = false;
+                } else if (data.type === 'getDataFromRange') {
+                  const { widgetId, worksheetName, associatedRange } = data;
+                  Excel.run(async (context) => {
+                    try {
+                      const sheet = context.workbook.worksheets.getItem(worksheetName);
+                      const range = sheet.getRange(associatedRange);
+                      range.load('values');
+                      await context.sync();
+                      const dataFromExcel = range.values;
+                      dialog.messageChild(
+                        JSON.stringify({
+                          type: 'dataFromRange',
+                          widgetId: widgetId,
+                          data: dataFromExcel,
+                        })
+                      );
+                    } catch (error: any) {
+                      console.error('Error getting data from range:', error);
+                      dialog.messageChild(
+                        JSON.stringify({
+                          type: 'dataFromRangeError',
+                          widgetId: widgetId,
+                          error: error.message || error.toString(),
+                        })
+                      );
+                    }
+                  });
+                }
+              }
+            );
+            const dashboardData = {
+              components: widgets,
+              layouts,
+              id: currentDashboardId,
+              title: dashboardTitle,
+              borderSettings: dashboardBorderSettings,
+            };
+            dialog.messageChild(
+              JSON.stringify({
+                type: 'initialState',
+                dashboard: dashboardData,
+                currentWorkbookId,
+                availableWorksheets,
+              })
+            );
+          }
+        }
+      );
+    } else {
+      message.error('Presenter mode is not available outside of Office.');
+    }
+  };
 
   return (
-    <section className={`dashboard dashboard-${config.layout}`} style={dashboardStyle}>
-      <DashboardBlueprint config={config} visibleCount={config.visibleViews.length} />
-
-      <section className="dashboard-title-card panel panel-accent">
-        <p className="eyebrow">Custom report</p>
-        <h1>{config.dashboardTitle}</h1>
-        <p>{config.dashboardSubtitle}</p>
-      </section>
-
-      {config.visibleViews.length === 0 ? (
-        <section className="blank-canvas panel">
-          <p className="eyebrow">Blank canvas</p>
-          <h2>Add your first widget</h2>
-          <p>
-            Use the widget library above to add charts, KPIs, tables, quality checks, and text-aligned
-            sections. Once widgets appear here, drag and drop them to rearrange the report canvas.
-          </p>
-        </section>
-      ) : (
-        <section className="dashboard-mosaic">
-          {config.visibleViews.map((viewId) => (
-            <div
-              className="canvas-widget"
-              draggable
-              key={viewId}
-              onDragStart={(event) => event.dataTransfer.setData("text/plain", viewId)}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                onReorderViews(event.dataTransfer.getData("text/plain") as DashboardViewId, viewId);
-              }}
-            >
-              <div className="drag-handle" aria-hidden="true">Drag to place · {config.viewSettings[viewId].title}</div>
-              {renderDashboardView(viewId, dataset, model, config)}
-            </div>
-          ))}
-        </section>
+    <div className="dashboard-wrapper">
+      <Draggable handle=".drag-handle">
+        <div className={`fixed-vertical-toolbar ${isCollapsed ? 'collapsed' : ''}`}>
+          <div className="drag-handle">
+            <Tooltip title="Drag Toolbar" placement="right">
+              <MenuOutlined />
+            </Tooltip>
+          </div>
+          {!isCollapsed && (
+            <>
+              <Tooltip title="Undo" placement="left">
+                <Button
+                  type="text"
+                  icon={<UndoOutlined />}
+                  onClick={undo}
+                  disabled={!canUndo}
+                  className="toolbar-button"
+                  aria-label="Undo"
+                />
+              </Tooltip>
+              <Tooltip title="Redo" placement="left">
+                <Button
+                  type="text"
+                  icon={<RedoOutlined />}
+                  onClick={redo}
+                  disabled={!canRedo}
+                  className="toolbar-button"
+                  aria-label="Redo"
+                />
+              </Tooltip>
+              <Tooltip title="Save" placement="left">
+                <Button
+                  type="text"
+                  icon={<SaveOutlined />}
+                  onClick={handleSave}
+                  className="toolbar-button"
+                  aria-label="Save"
+                />
+              </Tooltip>
+              <Tooltip title="Zoom In" placement="left">
+                <Button
+                  type="text"
+                  icon={<ZoomInOutlined />}
+                  onClick={zoomIn}
+                  className="toolbar-button"
+                  aria-label="Zoom In"
+                />
+              </Tooltip>
+              <Tooltip title="Zoom Out" placement="left">
+                <Button
+                  type="text"
+                  icon={<ZoomOutOutlined />}
+                  onClick={zoomOut}
+                  className="toolbar-button"
+                  aria-label="Zoom Out"
+                />
+              </Tooltip>
+              <Tooltip title="Reset Zoom" placement="left">
+                <Button
+                  type="text"
+                  icon={<ZoomInOutlined rotate={90} />}
+                  onClick={resetZoom}
+                  className="toolbar-button"
+                  aria-label="Reset Zoom"
+                />
+              </Tooltip>
+              <Tooltip title="Refresh All Charts" placement="left">
+                <Button
+                  type="text"
+                  icon={<ReloadOutlined />}
+                  onClick={handleRefresh}
+                  loading={isRefreshing}
+                  disabled={isRefreshing}
+                  className="toolbar-button"
+                  aria-label="Refresh All Charts"
+                />
+              </Tooltip>
+              <Tooltip title="Present Dashboard" placement="left">
+                <Button
+                  type="text"
+                  icon={<FundProjectionScreenOutlined />}
+                  onClick={handlePresentDashboard}
+                  className="toolbar-button"
+                  aria-label="Present Dashboard"
+                />
+              </Tooltip>
+              {isPresentationMode && (
+                <PresentationDashboard />
+              )}
+            </>
+          )}
+          <Tooltip
+            title={isCollapsed ? 'Expand Toolbar' : 'Collapse Toolbar'}
+            placement="left"
+          >
+            <Button
+              type="text"
+              icon={isCollapsed ? <MenuOutlined /> : <CloseOutlined />}
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="toolbar-button toggle-button"
+              aria-label={isCollapsed ? 'Expand Toolbar' : 'Collapse Toolbar'}
+            />
+          </Tooltip>
+        </div>
+      </Draggable>
+      {isPresenterMode && (
+        <div className="full-screen-exit-button">
+          <Button
+            type="primary"
+            icon={<FullscreenExitOutlined />}
+            onClick={closePresenterMode}
+          >
+            Exit Full Screen
+          </Button>
+        </div>
       )}
-    </section>
-  );
-}
-
-function DashboardBlueprint({ config, visibleCount }: { config: DashboardConfig; visibleCount: number }) {
-  return (
-    <section className="blueprint-strip">
-      <div>
-        <p className="eyebrow">Live report recipe</p>
-        <h2>{formatLayout(config.layout)} layout</h2>
-        <p>
-          {visibleCount} active view(s) · {formatCategorySort(config.categorySort)} · {config.categoryLimit} category group(s) · {config.previewRowCount} preview row(s)
-        </p>
-      </div>
-      <div className="blueprint-pills" aria-label="Active dashboard recipe">
-        {config.visibleViews.map((viewId, index) => (
-          <span key={viewId}>{index + 1}. {config.viewSettings[viewId].title}</span>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function renderDashboardView(
-  viewId: DashboardViewId,
-  dataset: WorkbookDataset,
-  model: DashboardModel,
-  config: DashboardConfig
-) {
-  const settings = config.viewSettings[viewId];
-  if (viewId === "health") {
-    return <HealthView key={viewId} model={model} settings={settings} />;
-  }
-
-  if (viewId === "trend") {
-    return <TrendView key={viewId} model={model} settings={settings} comparisonColor={config.theme.comparisonColor} />;
-  }
-
-  if (viewId === "categoryBar") {
-    return <CategoryBarView key={viewId} model={model} settings={settings} />;
-  }
-
-  if (viewId === "categoryPie") {
-    return <CategoryPieView key={viewId} model={model} settings={settings} />;
-  }
-
-  if (viewId === "measure") {
-    return <MeasureView key={viewId} model={model} settings={settings} />;
-  }
-
-  if (viewId === "columns") {
-    return <ColumnsView key={viewId} model={model} settings={settings} />;
-  }
-
-  if (viewId === "quality") {
-    return <QualityView key={viewId} model={model} settings={settings} />;
-  }
-
-  return <PreviewView key={viewId} dataset={dataset} model={model} settings={settings} />;
-}
-
-function HealthView({ model, settings }: { model: DashboardModel; settings: DashboardViewSettings }) {
-  return (
-    <section className="dashboard-view dashboard-view-wide" style={viewStyle(settings)}>
-      <section className="kpi-grid">
-        {model.kpis.map((kpi) => (
-          <KpiCard key={kpi.label} kpi={kpi} />
-        ))}
-      </section>
-
-      <section className="insight-grid">
-        <article className="quality-orb panel panel-accent">
-          <div className="orb" style={{ "--score": model.qualityScore } as React.CSSProperties}>
-            <span>{model.qualityScore}</span>
-          </div>
-          <div>
-            <p className="eyebrow">Intelligence layer</p>
-            <h2>{settings.title}</h2>
-            <p className="muted">
-              A blended signal from completeness, duplicate headers, and detected schema richness.
-            </p>
-          </div>
-        </article>
-
-        <article className="panel insight-panel">
-          <div className="panel-header">
-            <h2>Executive Insights</h2>
-            <span>{model.insights.length} signal(s)</span>
-          </div>
-
-          <div className="insight-list">
-            {model.insights.map((insight) => (
-              <div className={`insight-item insight-${insight.tone}`} key={insight.title}>
-                <strong>{insight.title}</strong>
-                <span>{insight.detail}</span>
+      <div
+        id="dashboard-container"
+        ref={dashboardRef}
+        className={`dashboard-container ${theme}`}
+        style={{
+          ...borderStyle,
+          width: '100%',
+          height: 'auto',
+          overflow: 'hidden',
+          transform: isPresenterMode ? 'none' : `scale(${zoomLevel})`,
+          transformOrigin: '0 0',
+          paddingBottom: '3px',
+        }}
+      >
+        <ResponsiveGridLayout
+          className="layout"
+          layouts={layouts}
+          breakpoints={{ xxl: 1920, xl: 1600, lg: 1200, md: 996, sm: 768 }}
+          cols={GRID_COLS}
+          rowHeight={10}
+          onLayoutChange={handleLayoutChange}
+          draggableHandle=".drag-handle"
+          isResizable={isEditingEnabled}
+          isDraggable={isEditingEnabled}
+          compactType={null}
+          preventCollision={false}
+          allowOverlap={true}
+          margin={[0, 0]}
+          containerPadding={[0, 0]}
+        >
+          {widgets.map((widget) => {
+            let content;
+            if (widget.type === 'text') {
+              content = <TextWidget data={widget.data as TextData} />;
+            } else if (widget.type === 'chart') {
+              const chartData = widget.data as ChartData;
+              content = (
+                <SalesChart key={widget.id} data={chartData} type={chartData.type} />
+              );
+            } else if (widget.type === 'title') {
+              content = (
+                <TitleWidgetComponent data={widget.data as TitleWidgetData} />
+              );
+            } else if (widget.type === 'image') {
+              content = <ImageWidget data={widget.data as ImageWidgetData} />;
+            } else if (widget.type === 'line') {
+              content = <LineWidget data={widget.data as LineWidgetData} />;
+            } else if (widget.type === 'gantt') {
+              content = (
+                <GanttChartComponent
+                  tasks={(widget.data as GanttWidgetData).tasks}
+                  title={(widget.data as GanttWidgetData).ganttTitle}
+                />
+              );
+            } else if (widget.type === 'metric') {
+              content = <MetricWidget id={widget.id} data={widget.data as MetricData} />;
+            } else if (widget.type === 'report') {
+              const reportWidget = widget as ReportWidgetType; // Type assertion
+              content = (
+                <ReportWidget
+                  key={reportWidget.id}
+                  id={reportWidget.id}
+                  name={reportWidget.name}
+                  data={reportWidget.data as ReportData}
+                  onDelete={handleRemoveWidget}
+                />
+              );
+            }
+            return (
+              <div
+                key={widget.id}
+                className="grid-item"
+                style={{ padding: 0, margin: 0, position: 'relative' }}
+              >
+                {isEditingEnabled && (
+                  <div className="widget-actions">
+                    <EditOutlined
+                      onClick={() => handleEditWidget(widget)}
+                      className="action-icon"
+                      aria-label={`Edit ${widget.type} Widget`}
+                    />
+                    {widget.id !== 'dashboard-title' && (
+                      <>
+                        <CloseOutlined
+                          onClick={() => handleRemoveWidget(widget.id)}
+                          className="action-icon"
+                          aria-label={`Remove ${widget.type} Widget`}
+                        />
+                        <CopyOutlined
+                          onClick={() => copyWidget(widget)}
+                          className="action-icon"
+                          aria-label={`Copy ${widget.type} Widget`}
+                        />
+                      </>
+                    )}
+                  </div>
+                )}
+                {widget.type === 'line' ? (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      padding: 0,
+                      margin: 0,
+                      backgroundColor: 'white',
+                    }}
+                  >
+                    {content}
+                  </div>
+                ) : (
+                  <Card
+                    className="widget-card"
+                    bordered={false}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      position: 'relative',
+                      margin: '0px',
+                      padding: '0px',
+                      boxShadow: 'none',
+                      backgroundColor: 'white',
+                    }}
+                  >
+                    {content}
+                  </Card>
+                )}
               </div>
-            ))}
-          </div>
-        </article>
-      </section>
-    </section>
-  );
-}
-
-function TrendView({
-  comparisonColor,
-  model,
-  settings,
-}: {
-  comparisonColor: string;
-  model: DashboardModel;
-  settings: DashboardViewSettings;
-}) {
-  if (model.trendData.length === 0) {
-    return <UnavailableView title="Trend Velocity" detail="Select a date field and measure to activate the trend chart." />;
-  }
-
-  if (settings.chartType === "bar") {
-    return (
-      <section className="panel chart-panel chart-panel-large dashboard-view dashboard-view-wide" style={viewStyle(settings)}>
-        <ChartHeader eyebrow="Temporal performance" title={settings.title} meta={`${model.trendData.length} point(s)`} />
-        <ResponsiveContainer width="100%" height={280}>
-          <BarChart data={model.trendData} margin={{ top: 10, right: 12, left: 0, bottom: 35 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="date" minTickGap={24} stroke="#64748b" />
-            <YAxis stroke="#64748b" />
-            <Tooltip content={<DashboardTooltip />} />
-            <Bar dataKey="value" radius={[8, 8, 0, 0]} fill={settings.accentColor} />
-          </BarChart>
-        </ResponsiveContainer>
-      </section>
-    );
-  }
-
-  if (settings.chartType === "line") {
-    return (
-      <section className="panel chart-panel chart-panel-large dashboard-view dashboard-view-wide" style={viewStyle(settings)}>
-        <ChartHeader eyebrow="Temporal performance" title={settings.title} meta={`${model.trendData.length} point(s)`} />
-        <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={model.trendData} margin={{ top: 10, right: 12, left: 0, bottom: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="date" minTickGap={24} stroke="#64748b" />
-            <YAxis stroke="#64748b" />
-            <Tooltip content={<DashboardTooltip />} />
-            <Line type="monotone" dataKey="value" stroke={settings.accentColor} strokeWidth={3} dot={false} />
-            <Line type="monotone" dataKey="comparison" dot={false} stroke={comparisonColor} strokeDasharray="5 5" />
-          </LineChart>
-        </ResponsiveContainer>
-      </section>
-    );
-  }
-
-  return (
-    <section className="panel chart-panel chart-panel-large dashboard-view dashboard-view-wide" style={viewStyle(settings)}>
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Temporal performance</p>
-          <h2>{settings.title}</h2>
-        </div>
-        <span>{model.trendData.length} point(s)</span>
+            );
+          })}
+        </ResponsiveGridLayout>
+        {isPresentationMode && (
+          <PresentationDashboard />
+        )}
+        <Modal
+          title="Edit Widget"
+          open={isModalVisible}
+          onCancel={handleModalCancel}
+          footer={null}
+        >
+          {currentWidget && (
+            <EditWidgetForm
+              widget={currentWidget}
+              onSubmit={handleModalOk}
+              onCancel={handleModalCancel}
+              isPresenterMode={isPresenterMode}
+            />
+          )}
+        </Modal>
+        {isLineSettingsModalVisible && editingWidget && editingWidget.type === 'line' && (
+          <LineSettingsModal
+            visible={isLineSettingsModalVisible}
+            data={editingWidget.data as LineWidgetData}
+            onSave={handleLineSettingsSave}
+            onCancel={handleLineSettingsCancel}
+          />
+        )}
       </div>
-
-      <ResponsiveContainer width="100%" height={280}>
-        <AreaChart data={model.trendData} margin={{ top: 10, right: 12, left: 0, bottom: 8 }}>
-          <defs>
-            <linearGradient id="valueGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={settings.accentColor} stopOpacity={0.35} />
-              <stop offset="95%" stopColor={settings.accentColor} stopOpacity={0.02} />
-            </linearGradient>
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis dataKey="date" minTickGap={24} stroke="#64748b" />
-          <YAxis stroke="#64748b" />
-          <Tooltip content={<DashboardTooltip />} />
-          <Area type="monotone" dataKey="value" stroke={settings.accentColor} strokeWidth={3} fill="url(#valueGradient)" />
-          <Line type="monotone" dataKey="comparison" dot={false} stroke={comparisonColor} strokeDasharray="5 5" />
-        </AreaChart>
-      </ResponsiveContainer>
-    </section>
-  );
-}
-
-function CategoryBarView({ model, settings }: { model: DashboardModel; settings: DashboardViewSettings }) {
-  if (model.categoryData.length === 0) {
-    return <UnavailableView title="Top Categories" detail="Select a category field to activate grouped charts." />;
-  }
-
-  if (settings.chartType === "pie" || settings.chartType === "donut") {
-    return <CategoryPieView model={model} settings={settings} />;
-  }
-
-  return (
-    <section className="panel chart-panel dashboard-view" style={viewStyle(settings)}>
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Ranked contribution</p>
-          <h2>{settings.title}</h2>
-        </div>
-        <span>{model.categoryData.length} group(s)</span>
-      </div>
-
-      <ResponsiveContainer width="100%" height={260}>
-        <BarChart data={model.categoryData} margin={{ top: 10, right: 12, left: 0, bottom: 35 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis dataKey="name" angle={-30} textAnchor="end" interval={0} height={70} stroke="#64748b" />
-          <YAxis stroke="#64748b" />
-          <Tooltip content={<DashboardTooltip />} />
-          <Bar dataKey="value" radius={[8, 8, 0, 0]} fill={settings.accentColor} />
-        </BarChart>
-      </ResponsiveContainer>
-    </section>
-  );
-}
-
-function CategoryPieView({ model, settings }: { model: DashboardModel; settings: DashboardViewSettings }) {
-  const pieData = model.categoryData.slice(0, 6);
-
-  if (pieData.length === 0) {
-    return <UnavailableView title="Category Share" detail="Select a category field to activate the mix chart." />;
-  }
-
-  return (
-    <section className="panel chart-panel dashboard-view" style={viewStyle(settings)}>
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Portfolio mix</p>
-          <h2>{settings.title}</h2>
-        </div>
-        <span>{pieData.length} slice(s)</span>
-      </div>
-
-      <ResponsiveContainer width="100%" height={260}>
-        <PieChart>
-          <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={settings.chartType === "pie" ? 0 : 58} outerRadius={88} paddingAngle={3}>
-            {pieData.map((entry, index) => (
-              <Cell key={entry.name} fill={index === 0 ? settings.accentColor : CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
-            ))}
-          </Pie>
-          <Tooltip content={<DashboardTooltip />} />
-        </PieChart>
-      </ResponsiveContainer>
-    </section>
-  );
-}
-
-function MeasureView({ model, settings }: { model: DashboardModel; settings: DashboardViewSettings }) {
-  if (!model.measureSummary) {
-    return <UnavailableView title="Measure Profile" detail="Select a numeric measure to activate distribution stats." />;
-  }
-
-  return (
-    <section className="panel dashboard-view dashboard-view-wide" style={viewStyle(settings)}>
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Distribution analysis</p>
-          <h2>{settings.title}</h2>
-        </div>
-      </div>
-
-      <div className="summary-strip">
-        <MetricPill label="Minimum" value={model.measureSummary.min} />
-        <MetricPill label="Average" value={model.measureSummary.average} />
-        <MetricPill label="Median" value={model.measureSummary.median} />
-        <MetricPill label="Maximum" value={model.measureSummary.max} />
-        <MetricPill label="Std. Dev." value={model.measureSummary.standardDeviation} />
-      </div>
-    </section>
-  );
-}
-
-function ColumnsView({ model, settings }: { model: DashboardModel; settings: DashboardViewSettings }) {
-  return (
-    <section className="panel dashboard-view dashboard-view-wide" style={viewStyle(settings)}>
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Schema map</p>
-          <h2>{settings.title}</h2>
-        </div>
-        <span>First {model.columnProfiles.length} fields</span>
-      </div>
-
-      <div className="profile-list">
-        {model.columnProfiles.map((profile) => (
-          <article className="profile-row" key={`${profile.name}-${profile.type}`}>
-            <div>
-              <strong>{profile.name}</strong>
-              <span>{profile.type} · {profile.uniqueCount} unique · {profile.missingCount} blank</span>
-            </div>
-            <div className="progress-track" aria-label={`${profile.completeness}% complete`}>
-              <span style={{ width: `${profile.completeness}%` }} />
-            </div>
-            <b>{profile.completeness}%</b>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function QualityView({ model, settings }: { model: DashboardModel; settings: DashboardViewSettings }) {
-  return (
-    <section className="panel dashboard-view" style={viewStyle(settings)}>
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Trust checks</p>
-          <h2>{settings.title}</h2>
-        </div>
-      </div>
-
-      <ul className="quality-list">
-        {model.dataQualityMessages.map((message) => (
-          <li key={message}>{message}</li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function PreviewView({
-  dataset,
-  model,
-  settings,
-}: {
-  dataset: WorkbookDataset;
-  model: DashboardModel;
-  settings: DashboardViewSettings;
-}) {
-  return (
-    <section className="panel dashboard-view dashboard-view-wide" style={viewStyle(settings)}>
-      <div className="panel-header">
-        <div>
-          <p className="eyebrow">Raw evidence</p>
-          <h2>{settings.title}</h2>
-        </div>
-        <span>First {model.previewRows.length} rows</span>
-      </div>
-
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              {dataset.headers.slice(0, 6).map((header, index) => (
-                <th key={`${header}-${index}`}>{header}</th>
-              ))}
-            </tr>
-          </thead>
-
-          <tbody>
-            {model.previewRows.map((row, rowIndex) => (
-              <tr key={rowIndex}>
-                {dataset.headers.slice(0, 6).map((_, columnIndex) => (
-                  <td key={columnIndex}>{formatCell(row[columnIndex])}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {dataset.headers.length > 6 && (
-        <p className="muted">Showing first 6 of {dataset.headers.length} columns.</p>
-      )}
-    </section>
-  );
-}
-
-function UnavailableView({ title, detail }: { title: string; detail: string }) {
-  return (
-    <section className="panel dashboard-view unavailable-view">
-      <p className="eyebrow">Awaiting fields</p>
-      <h2>{title}</h2>
-      <p>{detail}</p>
-    </section>
-  );
-}
-
-function ChartHeader({ eyebrow, meta, title }: { eyebrow: string; meta: string; title: string }) {
-  return (
-    <div className="panel-header">
-      <div>
-        <p className="eyebrow">{eyebrow}</p>
-        <h2>{title}</h2>
-      </div>
-      <span>{meta}</span>
     </div>
   );
-}
+};
 
-function viewStyle(settings: DashboardViewSettings): React.CSSProperties {
-  return {
-    "--view-accent": settings.accentColor,
-    textAlign: settings.textAlign,
-  } as React.CSSProperties;
-}
-
-function DashboardTooltip({ active, payload, label }: { active?: boolean; payload?: unknown[]; label?: string }) {
-  if (!active || !payload || payload.length === 0) {
-    return null;
-  }
-
-  const entries = payload as Array<{ name?: string; value?: number; payload?: ChartPoint }>;
-
-  return (
-    <div className="chart-tooltip">
-      <strong>{label ?? entries[0].payload?.name}</strong>
-      {entries.map((entry) => (
-        <span key={entry.name ?? "value"}>
-          {entry.name ?? "value"}: {formatCell(entry.value)}
-        </span>
-      ))}
-      {entries[0].payload?.share !== undefined && <span>Share: {entries[0].payload.share}%</span>}
-    </div>
-  );
-}
-
-function MetricPill({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="metric-pill">
-      <span>{label}</span>
-      <strong>{formatCell(value)}</strong>
-    </div>
-  );
-}
-
-function formatLayout(layout: DashboardLayout): string {
-  if (layout === "analyst") {
-    return "Analyst deep dive";
-  }
-
-  if (layout === "compact") {
-    return "Compact board";
-  }
-
-  return "Executive story";
-}
-
-function formatCategorySort(sortMode: string): string {
-  if (sortMode === "valueAsc") {
-    return "lowest values first";
-  }
-
-  if (sortMode === "nameAsc") {
-    return "A to Z grouping";
-  }
-
-  if (sortMode === "shareDesc") {
-    return "largest share first";
-  }
-
-  return "highest values first";
-}
-
-function formatViewName(viewId: DashboardViewId): string {
-  if (viewId === "categoryBar") {
-    return "Category bars";
-  }
-
-  if (viewId === "categoryPie") {
-    return "Category share";
-  }
-
-  if (viewId === "health") {
-    return "Health";
-  }
-
-  return viewId.charAt(0).toUpperCase() + viewId.slice(1);
-}
-
-function formatCell(value: unknown): string {
-  if (value === null || value === undefined || value === "") {
-    return "—";
-  }
-
-  if (typeof value === "number") {
-    return new Intl.NumberFormat(undefined, {
-      maximumFractionDigits: 2,
-    }).format(value);
-  }
-
-  return String(value);
-}
+export default Dashboard;
