@@ -65,17 +65,22 @@ export default function App({ title = "Workbook Dashboard" }: AppProps) {
   return (
     <main className="app-shell">
       <header className="hero">
-        <div>
-          <p className="eyebrow">Excel Add-in</p>
+        <div className="hero-copy">
+          <p className="eyebrow">Excel Intelligence Studio</p>
           <h1>{title}</h1>
           <p>
-            Analyze the active worksheet or selected range and render a live dashboard inside this
-            task pane.
+            Transform any worksheet into an executive-grade command center with schema inference,
+            quality scoring, trend velocity, category mix, and decision-ready insights.
           </p>
+        </div>
+        <div className="hero-visual" aria-hidden="true">
+          <span />
+          <span />
+          <span />
         </div>
       </header>
 
-      <section className="toolbar">
+      <section className="toolbar" aria-label="Workbook analysis actions">
         <button
           className="primary-button"
           onClick={() => analyze("worksheet")}
@@ -123,6 +128,11 @@ export default function App({ title = "Workbook Dashboard" }: AppProps) {
             </div>
 
             <div>
+              <span className="source-label">Scope</span>
+              <strong>{dataset.sourceMode === "worksheet" ? "Worksheet" : "Selection"}</strong>
+            </div>
+
+            <div>
               <span className="source-label">Rows</span>
               <strong>{dataset.rows.length}</strong>
             </div>
@@ -134,6 +144,10 @@ export default function App({ title = "Workbook Dashboard" }: AppProps) {
           </section>
 
           <section className="controls-panel">
+            <div className="controls-intro">
+              <p className="eyebrow">Model controls</p>
+              <h2>Tune the analytical lens</h2>
+            </div>
             <FieldSelector
               label="Measure"
               value={config.measureIndex}

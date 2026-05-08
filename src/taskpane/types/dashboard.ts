@@ -32,12 +32,30 @@ export interface Kpi {
   label: string;
   value: number | string;
   helper?: string;
+  tone?: "blue" | "purple" | "emerald" | "amber" | "rose";
 }
 
 export interface ChartPoint {
   name?: string;
   date?: string;
   value: number;
+  comparison?: number;
+  share?: number;
+}
+
+export interface DashboardInsight {
+  title: string;
+  detail: string;
+  tone: "positive" | "neutral" | "warning";
+}
+
+export interface ColumnProfile {
+  name: string;
+  type: ColumnType;
+  filledCount: number;
+  missingCount: number;
+  uniqueCount: number;
+  completeness: number;
 }
 
 export interface DashboardModel {
@@ -46,4 +64,15 @@ export interface DashboardModel {
   categoryData: ChartPoint[];
   dataQualityMessages: string[];
   previewRows: unknown[][];
+  insights: DashboardInsight[];
+  columnProfiles: ColumnProfile[];
+  qualityScore: number;
+  measureSummary?: {
+    name: string;
+    min: number;
+    max: number;
+    average: number;
+    median: number;
+    standardDeviation: number;
+  };
 }

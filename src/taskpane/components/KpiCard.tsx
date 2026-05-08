@@ -3,7 +3,7 @@ import { Kpi } from "../types/dashboard";
 
 export function KpiCard({ kpi }: { kpi: Kpi }) {
   return (
-    <article className="kpi-card">
+    <article className={`kpi-card kpi-card-${kpi.tone ?? "blue"}`}>
       <div className="kpi-label">{kpi.label}</div>
       <div className="kpi-value">{formatValue(kpi.value)}</div>
       {kpi.helper && <div className="kpi-helper">{kpi.helper}</div>}
