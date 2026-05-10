@@ -1,17 +1,14 @@
 // src/taskpane/components/ReportCard.tsx
-
 import React from 'react';
 import { Card, Button, Tooltip } from 'antd';
 import { DeleteOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
 import { ReportItem } from './types'; // Adjust the path as needed
-
 interface ReportCardProps {
   report: ReportItem;
   onView: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
 }
-
 const ReportCard: React.FC<ReportCardProps> = React.memo(({ report, onView, onEdit, onDelete }) => {
   return (
     <Card
@@ -69,5 +66,4 @@ const ReportCard: React.FC<ReportCardProps> = React.memo(({ report, onView, onEd
     </Card>
   );
 });
-
 export default ReportCard;

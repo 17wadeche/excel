@@ -1,5 +1,4 @@
 // src/taskpane/components/CreateDashboard.tsx
-
 import React, { useState, useEffect, useContext } from 'react';
 import {
   Layout,
@@ -13,7 +12,6 @@ import {
   Col,
   Card,
   List,
-  Avatar,
   Spin,
   Divider,
   Empty,
@@ -22,24 +20,20 @@ import { useNavigate } from 'react-router-dom';
 import { DashboardContext } from '../context/DashboardContext';
 import {
   DeleteOutlined,
-  EditOutlined,
-  EyeOutlined,
   PlusOutlined,
   FolderAddOutlined,
 } from '@ant-design/icons';
 import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
 import { setWorkbookIdInProperties } from '../utils/excelUtils';
 import { DashboardItem } from './types';
 const { Content } = Layout;
 const { Search } = Input;
-
 interface Widget {
   id: string;
   title: string;
   content: string;
-  // other properties
 }
-
 interface Template {
   id: string;
   name: string;
@@ -47,26 +41,24 @@ interface Template {
   widgets: Widget[];
   thumbnailUrl?: string;
 }
-
 const CreateDashboard: React.FC = () => {
   const [dashboardTitle, setDashboardTitle] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [templates, setTemplates] = useState<Template[]>([]);
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-
   const navigate = useNavigate();
   const {
     setDashboardTitle: setContextTitle,
     setWidgets,
     setCurrentTemplateId,
-    addDashboard,
+    setDashboards,
     setCurrentWorkbookId,
     setCurrentDashboardId,
     currentWorkbookId,
     setLayouts,
+    userEmail,
   } = useContext(DashboardContext)!;
-
   useEffect(() => {
     setLoading(true);
     const storedTemplates = JSON.parse(
@@ -77,30 +69,38 @@ const CreateDashboard: React.FC = () => {
       setLoading(false);
     }, 500);
   }, []);
-
   const handleCreate = async () => {
     if (!dashboardTitle.trim()) {
       message.error('Dashboard title cannot be empty.');
       return;
     }
-
     setLoading(true);
     try {
       const workbookId = uuidv4(); // Generate a new workbookId
       await setWorkbookIdInProperties(workbookId);
       setCurrentWorkbookId(workbookId); // Update context
-
-      const newDashboard = {
+      const newDashboard: DashboardItem = {
         id: uuidv4(),
         title: dashboardTitle,
-        components: [], // Initialize with empty components
-        layouts: {}, // Initialize layouts
-        workbookId, // Assign the workbookId
+        components: [],
+        layouts: {},
+        workbookId,
+        userEmail, // required by DashboardItem
       };
-
-      addDashboard(newDashboard);
-      message.success('Dashboard created successfully!');
-      navigate(`/dashboard/${newDashboard.id}`);
+      try {
+        const response = await axios.post<DashboardItem>('/api/dashboards', newDashboard);
+        const saved = response.data ?? newDashboard;
+        setDashboards((prev) => [...prev, saved]);
+        setCurrentDashboardId(saved.id);
+        message.success('Dashboard created successfully!');
+        navigate(`/dashboard/${saved.id}`);
+      } catch (serverErr) {
+        console.error('Server save failed, adding locally:', serverErr);
+        setDashboards((prev) => [...prev, newDashboard]);
+        setCurrentDashboardId(newDashboard.id);
+        message.warning('Dashboard created locally (server save failed).');
+        navigate(`/dashboard/${newDashboard.id}`);
+      }
     } catch (error) {
       console.error(error);
       message.error('Failed to create dashboard. Please try again.');
@@ -108,27 +108,24 @@ const CreateDashboard: React.FC = () => {
       setLoading(false);
     }
   };
-
   const createDashboardFromTemplate = (template: any) => {
     if (!currentWorkbookId) {
       message.error('No workbook ID found. Cannot create dashboard from template.');
       return;
     }
-  
     const newDashboard: DashboardItem = {
       id: uuidv4(),
       title: template.name || 'Untitled Dashboard',
       components: template.widgets || [],
       layouts: template.layouts || {},
-      workbookId: currentWorkbookId, // TypeScript now knows this is a string
+      workbookId: currentWorkbookId,
+      userEmail, // required by DashboardItem
     };
-  
-    addDashboard(newDashboard); // Add to dashboards array
-    setCurrentDashboardId(newDashboard.id); // Set current dashboard ID
-    navigate(`/dashboard/${newDashboard.id}`); // Navigate to the dashboard page
+    setDashboards((prev) => [...prev, newDashboard]);
+    setCurrentDashboardId(newDashboard.id);
+    navigate(`/dashboard/${newDashboard.id}`);
     message.success(`Dashboard "${newDashboard.title}" created from template!`);
   };
-
   const editTemplate = (template: any) => {
     setContextTitle(template.name || 'Untitled Template');
     setWidgets(template.widgets || []);
@@ -145,22 +142,18 @@ const CreateDashboard: React.FC = () => {
       maskClosable: true,
     });
   };
-
   const deleteTemplate = (id: string) => {
     const updatedTemplates = templates.filter((template) => template.id !== id);
     setTemplates(updatedTemplates);
     localStorage.setItem('dashboardTemplates', JSON.stringify(updatedTemplates));
     message.success('Template deleted successfully!');
   };
-
   const filteredTemplates = templates.filter((template) =>
     template.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
   return (
     <Layout style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
       <Content>
-        {/* Create Dashboard Form */}
         <Row justify="center" gutter={[100, 24]}>
           <Col xs={24} sm={20} md={16} lg={12}>
             <Card
@@ -222,14 +215,11 @@ const CreateDashboard: React.FC = () => {
             </Card>
           </Col>
         </Row>
-
         <Divider />
-
-        {/* Template Section */}
         <Row justify="center" gutter={[16, 24]}>
           <Col xs={24} sm={20} md={16} lg={12}>
             <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-              <h2 style={{ fontWeight: '600', color: '#001529' }}>Choose a Template</h2>
+              <h2 style={{ fontWeight: 600, color: '#001529' }}>Choose a Template</h2>
               <p style={{ color: '#595959' }}>Select a template to quickly create a new dashboard.</p>
             </div>
             <Search
@@ -300,7 +290,7 @@ const CreateDashboard: React.FC = () => {
                       }}
                     >
                       <Card.Meta
-                        title={<span style={{ fontSize: '18px', fontWeight: '500' }}>{template.name}</span>}
+                        title={<span style={{ fontSize: '18px', fontWeight: 500 }}>{template.name}</span>}
                       />
                     </Card>
                   </List.Item>
@@ -311,8 +301,6 @@ const CreateDashboard: React.FC = () => {
             )}
           </Col>
         </Row>
-
-        {/* Preview Modal */}
         {previewTemplate && (
           <Modal
             open={!!previewTemplate}
@@ -331,5 +319,4 @@ const CreateDashboard: React.FC = () => {
     </Layout>
   );
 };
-
 export default CreateDashboard;

@@ -3,7 +3,6 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { Table, Button, Select, Input, Modal, Form, message } from 'antd';
 import {
-  ColumnType,
   TablePaginationConfig,
   SorterResult,
   FilterValue,
@@ -12,52 +11,48 @@ import {
 import { ReloadOutlined } from '@ant-design/icons';
 import { DashboardContext } from '../context/DashboardContext';
 import { v4 as uuidv4 } from 'uuid';
-import { Widget, ReportItem, ReportColumn } from './types'; // Adjust path as necessary
+import { Widget, ReportItem, TableColumn, TableData } from './types';
 import { getWorkbookIdFromProperties } from '../utils/excelUtils'; // Adjust path as necessary
-
 const { Option } = Select;
-
 type TableDataItem = Record<string, any>;
-
 const CustomReport: React.FC = () => {
   const [data, setData] = useState<TableDataItem[]>([]);
   const [originalData, setOriginalData] = useState<TableDataItem[]>([]);
-  const [columns, setColumns] = useState<ReportColumn<TableDataItem>[]>([]);
+  const [columns, setColumns] = useState<TableColumn<TableDataItem>[]>([]);
+  const [worksheetName, setWorksheetName] = useState<string>('');
   const [filterColumn, setFilterColumn] = useState<string | null>(null);
   const [filterValue, setFilterValue] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
-
   const dashboardContext = useContext(DashboardContext);
   if (!dashboardContext) {
     throw new Error('DashboardContext must be used within a DashboardProvider');
   }
-  const { addWidget, dashboards, editDashboard, addReport } = dashboardContext;
-
+  const { dashboards, editDashboard, setReports } = dashboardContext;
   const [isAddToDashboardModalVisible, setIsAddToDashboardModalVisible] = useState(false);
   const [selectedDashboardId, setSelectedDashboardId] = useState<string | null>(null);
   const [isSaveReportModalVisible, setIsSaveReportModalVisible] = useState(false);
   const [reportName, setReportName] = useState('');
-
   const loadDataFromExcel = async () => {
     setLoading(true);
     try {
       await Excel.run(async (context) => {
         const sheet = context.workbook.worksheets.getActiveWorksheet();
         const range = sheet.getUsedRange();
+        sheet.load('name');
         range.load(['values', 'address']);
         await context.sync();
-
+        setWorksheetName(sheet.name);
         const values = range.values;
         if (values.length === 0) {
           message.warning('No data found in the active worksheet.');
           setLoading(false);
           return;
         }
-
-        const headers = values[0];
+        const headers = (values[0] as any[]).map((header, index) =>
+          String(header ?? `Column ${index + 1}`)
+        );
         const rows = values.slice(1);
-
-        const tableColumns: ReportColumn<TableDataItem>[] = headers.map(
+        const tableColumns: TableColumn<TableDataItem>[] = headers.map(
           (header: string, index: number) => ({
             title: header,
             dataIndex: `col${index}`,
@@ -69,7 +64,6 @@ const CustomReport: React.FC = () => {
             },
           })
         );
-
         const tableData: TableDataItem[] = rows.map((row: any[], rowIndex: number) => {
           const rowData: TableDataItem = { key: rowIndex };
           headers.forEach((_header: string, colIndex: number) => {
@@ -77,7 +71,6 @@ const CustomReport: React.FC = () => {
           });
           return rowData;
         });
-
         setColumns(tableColumns);
         setData(tableData);
         setOriginalData(tableData);
@@ -89,29 +82,22 @@ const CustomReport: React.FC = () => {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     loadDataFromExcel();
-
     let eventResult: OfficeExtension.EventHandlerResult<Excel.WorksheetChangedEventArgs>;
-
     Excel.run(async (context) => {
       const sheet = context.workbook.worksheets.getActiveWorksheet();
-
       eventResult = sheet.onChanged.add(async () => {
         await loadDataFromExcel();
       });
-
       await context.sync();
     });
-
     return () => {
       if (eventResult) {
         eventResult.remove();
       }
     };
   }, []);
-
   const applyFilter = () => {
     if (!filterColumn) {
       message.warning('Please select a column to filter.');
@@ -120,19 +106,16 @@ const CustomReport: React.FC = () => {
     const filteredData = originalData.filter((item) => {
       const cellValue = item[filterColumn];
       return cellValue
-        .toString()
         .toLowerCase()
         .includes(filterValue.toLowerCase());
     });
     setData(filteredData);
   };
-
   const resetFilter = () => {
     setData(originalData);
     setFilterColumn(null);
     setFilterValue('');
   };
-
   const handleTableChange = (
     _pagination: TablePaginationConfig,
     _filters: Record<string, FilterValue | null>,
@@ -140,7 +123,6 @@ const CustomReport: React.FC = () => {
     _extra: TableCurrentDataSource<TableDataItem>
   ) => {
     const activeSorter = Array.isArray(sorter) ? sorter[0] : sorter;
-
     if (activeSorter && activeSorter.order && activeSorter.field) {
       const { field, order } = activeSorter;
       const sortedData = [...data].sort((a, b) => {
@@ -153,44 +135,48 @@ const CustomReport: React.FC = () => {
       setData(originalData);
     }
   };
-
   const handleSaveReportCancel = () => {
     setIsSaveReportModalVisible(false);
     setReportName(''); // Reset the input
   };
-
+  const buildTableData = (name?: string): TableData<TableDataItem> => ({
+    columns,
+    data,
+    sheetName: worksheetName || 'Active Worksheet',
+    tableName: name?.trim() || 'CustomReport',
+  });
   const handleSaveReportConfirm = async () => {
-    if (reportName.trim()) {
-      const currentWorkbookId = await getWorkbookIdFromProperties();
-
-      if (!currentWorkbookId) {
-        message.error('Failed to get the current workbook ID.');
-        return;
-      }
-
-      const newReport: ReportItem = {
-        id: uuidv4(),
-        name: reportName.trim(),
-        data: { columns, data },
-        workbookId: currentWorkbookId,
-      };
-      addReport(newReport);
-      message.success('Report saved successfully!');
-      setIsSaveReportModalVisible(false);
-      setReportName(''); // Reset the input
-    } else {
+    const trimmedReportName = reportName.trim();
+    if (!trimmedReportName) {
       message.warning('Please enter a name for the report.');
+      return;
     }
+    const currentWorkbookId = await getWorkbookIdFromProperties();
+    if (!currentWorkbookId) {
+      message.error('Failed to get the current workbook ID.');
+      return;
+    }
+    const newReport: ReportItem = {
+      id: uuidv4(),
+      name: trimmedReportName,
+      data: {
+        title: trimmedReportName,
+        workbookId: currentWorkbookId,
+        table: buildTableData(trimmedReportName),
+      },
+      workbookId: currentWorkbookId,
+    };
+    setReports((prevReports) => [...prevReports, newReport]);
+    message.success('Report saved successfully!');
+    setIsSaveReportModalVisible(false);
+    setReportName('');
   };
-
   const handleSaveReport = () => {
     setIsSaveReportModalVisible(true);
   };
-
   const handleAddToDashboard = () => {
     setIsAddToDashboardModalVisible(true);
   };
-
   const handleAddToDashboardConfirm = () => {
     if (!selectedDashboardId) {
       message.warning('Please select a dashboard.');
@@ -198,26 +184,27 @@ const CustomReport: React.FC = () => {
     }
     const dashboard = dashboards.find((d) => d.id === selectedDashboardId);
     if (dashboard) {
-      const reportData = { columns, data };
+      const widgetName = reportName.trim() || 'Custom Report';
       const newWidget: Widget = {
-        id: `report-${uuidv4()}`,
-        type: 'report',
-        name: reportName.trim(), // Ensure 'name' is included
-        data: reportData,
+        id: `table-${uuidv4()}`,
+        type: 'table',
+        name: widgetName,
+        data: buildTableData(widgetName),
       };
-      dashboard.components.push(newWidget);
-      editDashboard(dashboard);
+      const updatedDashboard = {
+        ...dashboard,
+        components: [...(dashboard.components ?? []), newWidget],
+      };
+      editDashboard(updatedDashboard);
       message.success('Report added to dashboard!');
       setIsAddToDashboardModalVisible(false);
     } else {
       message.error('Selected dashboard not found.');
     }
   };
-
   const handleAddToDashboardCancel = () => {
     setIsAddToDashboardModalVisible(false);
   };
-
   return (
     <div>
       <Form layout="inline" style={{ marginBottom: '16px' }}>
@@ -279,8 +266,6 @@ const CustomReport: React.FC = () => {
         loading={loading}
         onChange={handleTableChange}
       />
-
-      {/* Add to Dashboard Modal */}
       <Modal
         title="Select Dashboard"
         open={isAddToDashboardModalVisible}
@@ -302,8 +287,6 @@ const CustomReport: React.FC = () => {
           ))}
         </Select>
       </Modal>
-
-      {/* Save Report Modal */}
       <Modal
         title="Save Report"
         open={isSaveReportModalVisible}
@@ -325,5 +308,4 @@ const CustomReport: React.FC = () => {
     </div>
   );
 };
-
 export default CustomReport;

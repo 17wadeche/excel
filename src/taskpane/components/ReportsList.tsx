@@ -15,9 +15,6 @@ import {
   Input,
 } from 'antd';
 import {
-  DeleteOutlined,
-  EyeOutlined,
-  EditOutlined,
   PlusOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
@@ -33,18 +30,15 @@ import {
   DroppableProvided,
   DraggableProvided,
 } from 'react-beautiful-dnd';
-
 const { Content } = Layout;
 const { Title } = Typography;
 const { Search } = Input;
-
 const ReportsList: React.FC = () => {
   const { reports, setReports, deleteReport } = useContext(DashboardContext)!;
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredReports, setFilteredReports] = useState<ReportItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-
   useEffect(() => {
     const filterReports = () => {
       const filtered = reports.filter((report) =>
@@ -52,10 +46,8 @@ const ReportsList: React.FC = () => {
       );
       setFilteredReports(filtered);
     };
-
     filterReports();
   }, [reports, searchTerm]);
-
   const handleDelete = (id: string) => {
     Modal.confirm({
       title: 'Are you sure you want to delete this report?',
@@ -69,35 +61,27 @@ const ReportsList: React.FC = () => {
       maskClosable: true,
     });
   };
-
   const handleView = (id: string) => {
     navigate(`/report/${id}`);
   };
-
   const handleEdit = (id: string) => {
     navigate(`/report/${id}/edit`);
   };
-
   const handleCreateNew = () => {
     navigate('/create-report');
   };
-
   const onDragEnd = (result: DropResult) => {
     if (!result.destination) {
       return;
     }
-
     const reorderedReports = Array.from(reports);
     const [removed] = reorderedReports.splice(result.source.index, 1);
     reorderedReports.splice(result.destination.index, 0, removed);
-
     setReports(reorderedReports);
   };
-
   return (
     <Layout style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
       <Content>
-        {/* Header Section */}
         <Row justify="space-between" align="middle" style={{ marginBottom: '24px' }}>
           <Col>
             <Title level={2} style={{ margin: 0 }}>
@@ -116,8 +100,6 @@ const ReportsList: React.FC = () => {
             </Button>
           </Col>
         </Row>
-
-        {/* Search Bar */}
         <Row justify="center" style={{ marginBottom: '24px' }}>
           <Col xs={24} sm={16} md={12} lg={8}>
             <Search
@@ -130,10 +112,7 @@ const ReportsList: React.FC = () => {
             />
           </Col>
         </Row>
-
         <Divider />
-
-        {/* Reports List */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '50px 0' }}>
             <Spin tip="Loading Reports..." size="large" />
@@ -180,5 +159,4 @@ const ReportsList: React.FC = () => {
     </Layout>
   );
 };
-
 export default ReportsList;

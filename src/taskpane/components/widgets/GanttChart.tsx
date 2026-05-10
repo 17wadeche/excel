@@ -1,280 +1,155 @@
 // src/taskpane/components/widgets/GanttChartComponent.tsx
-
-import React, { useState, useEffect } from 'react';
-import { FrappeGantt } from 'react-frappe-gantt';
-import { Task } from '../types';
-import {
-  notification,
-  Select,
-  Modal,
-  Form,
-  Input,
-  DatePicker,
-  Checkbox,
-  Button,
-  message,
-} from 'antd';
-import Draggable from 'react-draggable';
-import { v4 as uuidv4 } from 'uuid';
-import '../../../frappe-gantt.css';
-import './GanttChart.css'
-import AddTaskForm from './AddTaskForm';
-
+import React, { useState, useEffect } from "react";
+import { Row, Col } from "antd";
+import { FrappeGantt } from "react-frappe-gantt";
+import { Task } from "../types";
+import { Select, Button } from "antd";
+import "../Dashboard.css";
+import AddTaskForm from "./AddTaskForm";
 const { Option } = Select;
-
-const FrappeGanttAny = FrappeGantt as any;
-
 interface GanttChartComponentProps {
   tasks: Task[];
   onTasksChange?: (updatedTasks: Task[]) => void;
-  titleAlignment?: 'left' | 'center';
+  titleAlignment?: "left" | "center";
   title?: string;
+  arrowColor?: string;
+  defaultProgressColor?: string;
 }
-
 const GanttChartComponent: React.FC<GanttChartComponentProps> = ({
   tasks: initialTasks,
   onTasksChange,
-  titleAlignment = 'left',
-  title = 'Gantt Chart',
+  titleAlignment = "left",
+  title = "Gantt Chart",
+  defaultProgressColor = "#1890ff",
 }) => {
-  const [viewMode, setViewMode] = useState<'Day' | 'Week' | 'Month'>('Week');
+  const [viewMode, setViewMode] = useState<"Day" | "Week" | "Month">("Week");
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [tooltipContent, setTooltipContent] = useState<React.ReactNode>(null);
-  const [tooltipVisible, setTooltipVisible] = useState(false);
-  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [addTaskModalVisible, setAddTaskModalVisible] = useState(false);
-  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-
-  const rowHeight = 20; // Adjust this value as needed
-
   useEffect(() => {
     setTasks(initialTasks);
   }, [initialTasks]);
-
+  const injectTaskColors = (tasks: Task[]) => {
+    const styleElementId = "gantt-task-colors";
+    let styleElement = document.getElementById(styleElementId) as HTMLStyleElement | null;
+    if (!styleElement) {
+      styleElement = document.createElement("style") as HTMLStyleElement;
+      styleElement.id = styleElementId;
+      document.head.appendChild(styleElement);
+    }
+    if (styleElement.sheet) {
+      while (styleElement.sheet.cssRules.length > 0) {
+        styleElement.sheet.deleteRule(0);
+      }
+    }
+    const updatedTasks = tasks.map((task) => {
+      if (!task.id) return task;
+      const className = `task-${task.id}`;
+      if (task.color) {
+        const ruleBar = `
+          .${className} .bar {
+            fill: ${task.color} !important;
+          }
+        `;
+        styleElement.sheet?.insertRule(ruleBar, styleElement.sheet.cssRules.length);
+      }
+      const progressColor = task.progressColor || defaultProgressColor;
+      if (progressColor) {
+        const ruleBarProgress = `
+          .${className} .bar-progress {
+            fill: ${progressColor} !important;
+          }
+        `;
+        styleElement.sheet?.insertRule(ruleBarProgress, styleElement.sheet.cssRules.length);
+      }
+      return {
+        ...task,
+        custom_class: className,
+      };
+    });
+    setTasks(updatedTasks);
+  };
+  useEffect(() => {
+    injectTaskColors(tasks);
+  }, [tasks, defaultProgressColor]);
   const handleDateChange = (task: Task, start: Date, end: Date) => {
-    const updatedTasks = tasks.map((t) => {
-      if (t.id === task.id) {
-        return {
-          ...t,
-          start: start.toISOString().split('T')[0],
-          end: end.toISOString().split('T')[0],
-        };
-      }
-      return t;
-    });
+    const updatedTasks = tasks.map((t) =>
+      t.id === task.id ? { ...t, start: start.toISOString().split("T")[0], end: end.toISOString().split("T")[0] } : t
+    );
     setTasks(updatedTasks);
-    if (onTasksChange) {
-      onTasksChange(updatedTasks);
-    }
+    if (onTasksChange) onTasksChange(updatedTasks);
   };
-
   const handleProgressChange = (task: Task, progress: number) => {
-    const updatedTasks = tasks.map((t) => {
-      if (t.id === task.id) {
-        return { ...t, progress };
-      }
-      return t;
-    });
+    const updatedTasks = tasks.map((t) => (t.id === task.id ? { ...t, progress } : t));
     setTasks(updatedTasks);
-    if (onTasksChange) {
-      onTasksChange(updatedTasks);
-    }
+    if (onTasksChange) onTasksChange(updatedTasks);
   };
-
-  const handleClick = (task: Task) => {
-    // Use the stored mouse position or other means to get `clientX` and `clientY`
-    const { x: clientX, y: clientY } = mousePosition;
-  
-    setTooltipContent(
-      <div className="tooltip-content">
-        <h5>{task.name}</h5>
-        <p>Task started on: {new Date(task.start).toLocaleDateString()}</p>
-        <p>Expected to finish by: {new Date(task.end).toLocaleDateString()}</p>
-        <p>{task.progress}% completed!</p>
-      </div>
-    );
-    setTooltipPosition({ x: clientX, y: clientY });
-    setTooltipVisible(true);
-  };
-
-  const handleOutsideClick = () => {
-    setTooltipVisible(false);
-  };
-
-  useEffect(() => {
-    const handleMouseMove = (event: MouseEvent) => {
-      setMousePosition({ x: event.clientX, y: event.clientY });
-    };
-  
-    document.addEventListener('mousemove', handleMouseMove);
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (tooltipVisible) {
-      document.addEventListener('click', handleOutsideClick);
-    } else {
-      document.removeEventListener('click', handleOutsideClick);
-    }
-    return () => {
-      document.removeEventListener('click', handleOutsideClick);
-    };
-  }, [tooltipVisible]);
-
-  const handleAddTask = (values: any) => {
-    const newTask: Task = {
-      id: uuidv4(),
-      name: values.name,
-      start: values.start.format('YYYY-MM-DD'),
-      end: values.end.format('YYYY-MM-DD'),
-      progress: values.progress,
-      dependencies: values.dependencies ? values.dependencies.split(',') : [],
-      custom_class: values.custom_class ? 'is-important' : '',
-    };
-    const updatedTasks = [...tasks, newTask];
-    setTasks(updatedTasks);
-    setAddTaskModalVisible(false);
-    if (onTasksChange) {
-      onTasksChange(updatedTasks);
-    }
-    message.success('Task added successfully!');
-  };
-  const handleTaskSelection = (taskId: string) => {
-    setSelectedTaskIds((prevIds) =>
-      prevIds.includes(taskId)
-        ? prevIds.filter((id) => id !== taskId)
-        : [...prevIds, taskId]
-    );
-  };
-
-  useEffect(() => {
-    const svgElement = document.querySelector('.frappe-gantt svg');
-    if (svgElement) {
-      const gridBackground = svgElement.querySelector('.grid-background');
-      if (gridBackground) {
-        const gridHeight = parseFloat(gridBackground.getAttribute('height') || '0');
-        svgElement.setAttribute('height', `${gridHeight}`);
-        svgElement.setAttribute('viewBox', `0 0 ${svgElement.getAttribute('width')} ${gridHeight}`);
-      }
-    }
-  }, [tasks]);
-
   return (
-    <Draggable handle=".drag-handle">
+    <div
+      className="gantt-chart-container"
+      style={{
+        width: "100%",
+        height: "100%",
+        padding: "8px",
+        overflow: "hidden",
+        border: "1px solid #ddd",
+        backgroundColor: "#fff",
+        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+        borderRadius: "8px",
+        position: "relative",
+      }}
+    >
       <div
-        className="gantt-chart-container"
+        className="drag-handle"
         style={{
-          width: '100%',
-          height: `${tasks.length * (rowHeight + 10) + 200}px`,
-          position: 'relative',
-          overflow: 'hidden',
+          textAlign: titleAlignment,
+          background: "#f0f0f0",
+          padding: "8px",
+          cursor: "move",
+          borderBottom: "1px solid #ddd",
+          borderRadius: "8px 8px 0 0",
+          userSelect: "none",
         }}
       >
-        {/* Title Section with Drag Handle and Alignment Option */}
-        <div
-          className="gantt-header drag-handle"
-          style={{
-            width: '100%',
-            textAlign: titleAlignment,
-            cursor: 'move',
-            padding: '0px',
-            backgroundColor: '#ffffff',
-            borderBottom: '1px solid #ddd',
-            marginBottom: '0px',
-          }}
-        >
-          <strong>{title}</strong>
-        </div>
-
-        {/* View Mode Buttons */}
-        <div
-          style={{
-            marginBottom: '0px',
-            display: 'flex',
-            gap: '0px',
-            alignSelf:
-              titleAlignment === 'center' ? 'center' : 'flex-start',
-          }}
-        >
-          <Button onClick={() => setViewMode('Day')}>Day</Button>
-          <Button onClick={() => setViewMode('Week')}>Week</Button>
-          <Button onClick={() => setViewMode('Month')}>Month</Button>
-        </div>
-
-        {/* Add and Delete Task Buttons */}
-        <div
-          style={{
-            marginBottom: '0px',
-            display: 'flex',
-            gap: '0px',
-            alignSelf:
-              titleAlignment === 'center' ? 'center' : 'flex-start',
-          }}
-        >
-        </div>
-
-        {/* Task Selection for Deletion */}
-        <div
-          style={{
-            marginBottom: '0px',
-            maxHeight: '150px',
-            overflowY: 'auto',
-          }}
-        >
-          {tasks.map((task) => (
-            <div key={task.id}>
-              <Checkbox
-                checked={selectedTaskIds.includes(task.id)}
-                onChange={() => handleTaskSelection(task.id)}
-              >
-                {task.name}
-              </Checkbox>
-            </div>
-          ))}
-        </div>
-
-        {/* Gantt Chart */}
-        <div className="gantt-chart-wrapper" style={{ width: '100%', height: '100%' }}>
+        <strong>{title}</strong>
+      </div>
+      <Row justify="space-between" align="middle" style={{ margin: "16px 0", padding: "0 8px" }}>
+        <Col>
+          <Select
+            value={viewMode}
+            onChange={(value: "Day" | "Week" | "Month") => setViewMode(value)}
+            style={{ width: 120 }}
+          >
+            <Option value="Day">Day</Option>
+            <Option value="Week">Week</Option>
+            <Option value="Month">Month</Option>
+          </Select>
+        </Col>
+        <Col>
+          <Button type="primary" onClick={() => setAddTaskModalVisible(true)}>
+            Add Task
+          </Button>
+        </Col>
+      </Row>
+      <div
+        className="gantt-chart-wrapper"
+        style={{
+          overflowX: "auto",
+          overflowY: "auto",
+          padding: "0 8px",
+          height: "calc(100% - 100px)",
+        }}
+      >
+        <div style={{ minWidth: "2000px", height: "600px" }}>
           <FrappeGantt
             tasks={tasks}
             viewMode={viewMode}
-            onClick={handleClick}
             onDateChange={handleDateChange}
             onProgressChange={handleProgressChange}
           />
         </div>
-
-        {/* Tooltip */}
-        {tooltipVisible && (
-          <div
-            className="custom-tooltip"
-            style={{
-              position: 'absolute',
-              top: tooltipPosition.y - 100,
-              left: tooltipPosition.x - 100,
-              backgroundColor: '#fff',
-              border: '1px solid #ccc',
-              padding: '8px',
-              zIndex: 1000,
-            }}
-          >
-            {tooltipContent}
-          </div>
-        )}
-
-        {/* Add Task Modal */}
-        <AddTaskForm
-          visible={addTaskModalVisible}
-          onCreate={handleAddTask}
-          onCancel={() => setAddTaskModalVisible(false)}
-          existingTasks={tasks}
-        />
       </div>
-    </Draggable>
+      <AddTaskForm visible={addTaskModalVisible} onCancel={() => setAddTaskModalVisible(false)} />
+    </div>
   );
 };
-
 export default GanttChartComponent;

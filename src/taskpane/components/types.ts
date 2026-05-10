@@ -1,88 +1,80 @@
 // src/taskpane/components/types.ts
-
-import { ColumnType } from 'antd/lib/table/interface';
-import { TdHTMLAttributes } from 'react';
-import { ChartType, ChartOptions, LegendOptions, TooltipOptions, ChartDataset, DefaultDataPoint } from 'chart.js';
-export interface GridLayoutItem {
-  i: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  minW?: number;
-  maxW?: number;
-  minH?: number;
-  maxH?: number;
-  static?: boolean;
-  isDraggable?: boolean;
-  isResizable?: boolean;
-  moved?: boolean;
-}
-// Define Widget Types
-export type WidgetType = 'title' | 'text' | 'chart' | 'gantt' | 'image' | 'metric' | 'report' | 'line';
-
+import { ColumnType } from "antd/lib/table/interface";
+import { ChartType as ChartJsType, ChartDataset } from "chart.js";
+export type WidgetType = "title" | "text" | "chart" | "gantt" | "image" | "metric" | "table" | "line";
 export interface TitleWidgetData {
   content: string;
   fontSize: number;
   textColor: string;
   backgroundColor: string;
-  titleAlignment: 'left' | 'center' | 'right';
+  titleAlignment: "left" | "center" | "right";
 }
-
 export interface WidgetBase {
   id: string;
   type: WidgetType;
+  zIndex?: number;
 }
-
 export interface TextWidget extends WidgetBase {
-  type: 'text';
+  type: "text";
   data: TextData;
 }
-
 export interface LineWidgetData {
   color: string;
   thickness: number;
-  style: 'solid' | 'dashed' | 'dotted';
-  orientation: 'horizontal' | 'vertical';
+  style: "solid" | "dashed" | "dotted";
+  orientation: "horizontal" | "vertical";
 }
-
 export interface ChartWidget extends WidgetBase {
-  type: 'chart';
+  type: "chart";
   data: ChartData;
 }
-
 export interface GanttWidget extends WidgetBase {
-  type: 'gantt';
+  type: "gantt";
   data: GanttWidgetData;
 }
-
 export interface ImageWidget extends WidgetBase {
-  type: 'image';
+  type: "image";
   data: ImageWidgetData;
 }
-
 export interface MetricWidget extends WidgetBase {
-  type: 'metric';
+  type: "metric";
   data: MetricData;
 }
-
-export interface ReportWidgetType extends WidgetBase {
-  type: 'report';
-  name: string; // Ensure 'name' is included
-  data: ReportData;
+export interface TableWidget extends WidgetBase {
+  type: "table";
+  name: string;
+  data: TableData;
 }
-
 export interface LineWidget extends WidgetBase {
-  type: 'line';
+  type: "line";
   data: LineWidgetData;
 }
-
 export interface TitleWidget extends WidgetBase {
-  type: 'title';
+  type: "title";
   data: TitleWidgetData;
 }
-
-// Union Type for Widget
+export interface ReportData {
+  title?: string;
+  description?: string;
+  widgets?: Widget[];
+  components?: Widget[];
+  layouts?: { [key: string]: GridLayoutItem[] };
+  workbookId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: any;
+}
+export interface ReportItem {
+  id: string;
+  name: string;
+  description?: string;
+  data?: ReportData;
+  workbookId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  userEmail?: string;
+  [key: string]: any;
+}
 export type Widget =
   | TitleWidget
   | TextWidget
@@ -90,108 +82,120 @@ export type Widget =
   | GanttWidget
   | ImageWidget
   | MetricWidget
-  | ReportWidgetType
+  | TableWidget
   | LineWidget;
-
-
-// Widget Data Types
-export type WidgetData<T extends WidgetType> =
-  T extends 'title' ? TitleWidgetData :
-  T extends 'text' ? TextData :
-  T extends 'chart' ? ChartData :
-  T extends 'gantt' ? GanttWidgetData :
-  T extends 'image' ? ImageWidgetData :
-  T extends 'metric' ? MetricData :
-  T extends 'report' ? ReportData :
-  T extends 'line' ? LineWidgetData :
-  never;
-
-// Metric Widget Data
+export type WidgetData<T extends WidgetType> = T extends "title"
+  ? TitleWidgetData
+  : T extends "text"
+    ? TextData
+    : T extends "chart"
+      ? ChartData
+      : T extends "gantt"
+        ? GanttWidgetData
+        : T extends "image"
+          ? ImageWidgetData
+          : T extends "metric"
+            ? MetricData
+            : T extends "table"
+              ? TableData
+              : T extends "line"
+                ? LineWidgetData
+                : never;
 export interface MetricData {
   worksheetName: string;
   cellAddress: string;
   targetValue: number;
-  comparison: 'greater' | 'less';
+  comparison: "greater" | "less";
   displayName: string;
-  format: 'percentage' | 'currency' | 'number';
+  format: "percentage" | "currency" | "number";
   currentValue: number;
   fontSize: number;
   textColor: string;
   backgroundColor: string;
-  titleAlignment: 'left' | 'center'| 'right';
+  titleAlignment: "left" | "center" | "right";
 }
-
-// Report Item Interface
-export interface ReportItem {
+export interface TableItem {
   id: string;
   name: string;
-  data: ReportData;
+  data: TableData;
   workbookId: string;
 }
-
-export interface ReportColumn<T> extends Omit<ColumnType<T>, 'title'> {
+export interface TableColumn<T> extends Omit<ColumnType<T>, "title"> {
   dataIndex: string;
   key: string | number;
-  title: string; // Ensure title is always a string
+  title: string;
 }
-
-export interface ReportData<T = Record<string, any>> {
-  columns: ReportColumn<T>[];
+export interface TableData<T = Record<string, any>> {
+  columns: TableColumn<T>[];
   data: T[];
+  sheetName: string;
+  tableName: string;
 }
-
+export interface User {
+  userEmail: string;
+  fullName?: string;
+}
 export interface TextData {
   content: string;
   fontSize: number;
   textColor: string;
   backgroundColor: string;
-  titleAlignment: 'left' | 'center' | 'right';
+  titleAlignment: "left" | "center" | "right";
 }
-
 export interface Task {
   id: string;
   name: string;
-  start: string; // 'YYYY-MM-DD' format
-  end: string;   // 'YYYY-MM-DD' format
-  progress: number; // Between 0 and 100
-  dependencies?: string; // Comma-separated IDs of dependencies
-  custom_class?: string; // Optional CSS class
-  type?: string; // Add this if you are using it
+  start: string;
+  end: string;
+  progress: number;
+  dependencies?: string;
+  custom_class?: string;
+  type?: string;
   color?: string;
+  duration?: number;
+  completed?: string;
+  progressColor?: string;
 }
-
-// Gantt Widget Data Interface
 export interface GanttWidgetData {
   tasks: Task[];
-  ganttTitle?: string;
-  titleAlignment?: 'left' | 'center' | 'right';
+  title: string;
+  titleAlignment?: "left" | "center" | "right";
+  arrowColor?: string;
+  defaultProgressColor?: string;
 }
-
-// Chart Data Interface
+export type DashboardChartType =
+  | ChartJsType
+  | "funnel"
+  | "treemap"
+  | "boxplot"
+  | "candlestick"
+  | "barWithErrorBars"
+  | "lineWithErrorBars";
+export type ChartType = DashboardChartType;
 export interface ChartData {
   title?: string;
-  titleAlignment?: 'left' | 'center' | 'right';
-  type: ChartType;
+  titleAlignment?: "left" | "center" | "right";
+  type: DashboardChartType;
   labels: string[];
   scales?: {
     x?: {
-      type?: 'category' | 'linear' | 'logarithmic'| 'time';
+      type?: "category" | "linear" | "logarithmic" | "time";
       title?: {
         display?: boolean;
         text?: string;
       };
     };
     y?: {
-      type?: 'category' | 'linear' | 'logarithmic';
+      type?: "category" | "linear" | "logarithmic";
       title?: {
         display?: boolean;
         text?: string;
       };
     };
     y1?: {
-      type?: 'category' | 'linear' | 'logarithmic';
+      type?: "category" | "linear" | "logarithmic";
       display?: boolean;
-      position?: 'left' | 'right';
+      position?: "left" | "right";
       title?: {
         display?: boolean;
         text?: string;
@@ -201,7 +205,7 @@ export interface ChartData {
   plugins?: {
     legend?: {
       display?: boolean;
-      position?: 'top' | 'left' | 'bottom' | 'right';
+      position?: "top" | "left" | "bottom" | "right";
     };
     tooltip?: {
       enabled?: boolean;
@@ -214,10 +218,10 @@ export interface ChartData {
   backgroundColor?: string;
   gridLineColor?: string;
   locale?: string;
-  associatedRange: string; // e.g., "A1:B10"
+  associatedRange: string;
   worksheetName: string;
   chartIndex?: number;
-  datasets: ChartDataset<'line'>[];
+  datasets: ChartDataset<"line">[];
   dynamicUpdate?: {
     enabled?: boolean;
     interval?: number;
@@ -228,63 +232,60 @@ export interface ChartData {
     endColor?: string;
   };
 }
-
-// Chart Widget Interface
-export interface ChartWidget {
-  id: string;
-  type: 'chart';
-  data: ChartData;
-}
-
 export interface DashboardBorderSettings {
   showBorder: boolean;
   color: string;
-  thickness: number; // in pixels
-  style: 'solid' | 'dashed' | 'dotted';
+  thickness: number;
+  style: "solid" | "dashed" | "dotted";
+  backgroundColor?: string;
+  width?: number;
 }
-
-// Image Widget Data Interface
 export interface ImageWidgetData {
   src: string;
 }
-
-// Export Chart Types
-export { ChartType, ChartDataset };
-
-// Component Data Type
+export {ChartDataset};
 export type ComponentData = TextData | ChartData | GanttWidgetData;
-
-// Dashboard Component Interface
-export interface DashboardComponent {
-  id: string;
-  type: 'gantt' | 'chart' | 'text' | 'image'| 'metric' | 'report' | 'line';
-  data: WidgetData<WidgetType>;
+export type DashboardComponent = Widget;
+export type GridLayoutItem = LayoutItem;
+export interface NewDashboard {
+  title: string;
+  components: Widget[];
+  layouts: { [key: string]: GridLayoutItem[] };
+  versions?: DashboardVersion[];
+  workbookId: string;
 }
-
-// Dashboard Item Interface
-export interface DashboardItem {
+import { LayoutItem } from "react-grid-layout/legacy";
+export interface DashboardItem extends Omit<NewDashboard, "title" | "components" | "layouts"> {
   id: string;
   title: string;
   components: Widget[];
-  layouts?: { [key: string]: GridLayoutItem[] };
+  layouts: { [key: string]: GridLayoutItem[] };
   versions?: DashboardVersion[];
-  workbookId?: string;
+  workbookId: string;
+  borderSettings?: DashboardBorderSettings;
+  userEmail: string;
 }
-
-// Dashboard Version Interface
 export interface DashboardVersion {
   id: string;
   timestamp: string;
   title: string;
   components: Widget[];
   layouts: { [key: string]: GridLayoutItem[] };
+  borderSettings?: DashboardBorderSettings;
 }
-
-// Dataset Interface
 export interface Dataset {
   label: string;
   data: number[];
   backgroundColor: string;
   borderColor?: string;
   borderWidth?: number;
+}
+export interface TemplateItem {
+  id: string;
+  name: string;
+  description?: string;
+  widgets: Widget[];
+  thumbnailUrl?: string;
+  layouts?: { [key: string]: GridLayoutItem[] };
+  borderSettings?: DashboardBorderSettings;
 }

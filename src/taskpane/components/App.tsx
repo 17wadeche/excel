@@ -1,5 +1,4 @@
 // src/taskpane/components/App.tsx
-
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import CustomLayout from './CustomLayout';
@@ -13,8 +12,6 @@ import CustomReport from './CustomReport';
 import ReportsList from './ReportsList';
 import ReportView from './ReportView';
 import EditTemplate from './EditTemplate';
-import EditDashboard from './EditDashboard';
-
 const App: React.FC = () => {
   return (
     <DashboardProvider>
@@ -39,5 +36,4 @@ const App: React.FC = () => {
     </DashboardProvider>
   );
 };
-
 export default App;

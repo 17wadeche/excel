@@ -1,14 +1,12 @@
 // src/taskpane/components/EditDashboard.tsx
-
 import React, { useEffect, useState, useContext } from 'react';
 import { Form, Input, Button, Select, Card, Space, message } from 'antd';
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-import { DashboardItem, TextData, ChartData, GanttWidgetData, ComponentData, DashboardComponent, Dataset } from './types';
+import type { DashboardItem, TextData, ChartData, GanttWidgetData, Widget } from './types';
 import { DashboardContext } from '../context/DashboardContext';
 import TextFormComponent from './TextFormComponent';
-
 const { Option } = Select;
 const EditDashboard: React.FC = () => {
   const [form] = Form.useForm();
@@ -32,58 +30,73 @@ const EditDashboard: React.FC = () => {
   }, [id, dashboards, form, navigate]);
   const onFinish = (values: any) => {
     const { title, components } = values;
-    const updatedComponents: DashboardComponent[] = (components || []).map((comp: any) => {
-      let componentData: ComponentData;
+    const updatedComponents: Widget[] = (components || []).map((comp: any): Widget => {
       switch (comp.type) {
         case 'gantt':
-          componentData = {
-            tasks: (comp.data.tasks || []).map((task: any) => ({
-              id: task.id || uuidv4(),
-              name: task.name,
-              start: task.start,
-              end: task.end,
-              progress: task.progress,
-              dependencies: task.dependencies,
-              color: task.color,
-            })),
-          } as GanttWidgetData;
-          break;
+          return {
+            id: comp.id || uuidv4(),
+            type: 'gantt',
+            data: {
+              title: comp.data?.title ?? '',
+              tasks: (comp.data?.tasks || []).map((task: any) => ({
+                id: task.id || uuidv4(),
+                name: task.name,
+                start: task.start,
+                end: task.end,
+                progress: Number(task.progress ?? 0),
+                dependencies: task.dependencies,
+                color: task.color,
+              })),
+            } as GanttWidgetData,
+          };
         case 'chart':
-          componentData = {
-            title: comp.data.title,
-            type: comp.data.chartType,
-            labels: comp.data.labels.split(',').map((label: string) => label.trim()),
-            datasets: comp.data.datasets.map((dataset: any) => ({
-              id: dataset.id || uuidv4(), // Ensure each dataset has an 'id'
-              label: dataset.label,
-              data: dataset.data.split(',').map((num: string) => Number(num.trim())),
-              backgroundColor: dataset.backgroundColor,
-              borderColor: dataset.borderColor,
-              borderWidth: Number(dataset.borderWidth),
-            })),
-          } as ChartData;
-          break;
+          return {
+            id: comp.id || uuidv4(),
+            type: 'chart',
+            data: {
+              title: comp.data?.title,
+              type: comp.data?.chartType ?? comp.data?.type ?? 'bar',
+              labels:
+                typeof comp.data?.labels === 'string'
+                  ? comp.data.labels.split(',').map((label: string) => label.trim())
+                  : comp.data?.labels ?? [],
+              associatedRange: comp.data?.associatedRange ?? '',
+              worksheetName: comp.data?.worksheetName ?? '',
+              datasets: (comp.data?.datasets || []).map((dataset: any) => ({
+                label: dataset.label,
+                data:
+                  typeof dataset.data === 'string'
+                    ? dataset.data.split(',').map((num: string) => Number(num.trim()))
+                    : dataset.data ?? [],
+                backgroundColor: dataset.backgroundColor,
+                borderColor: dataset.borderColor,
+                borderWidth: Number(dataset.borderWidth ?? 1),
+              })),
+            } as ChartData,
+          };
         case 'text':
-          componentData = {
-            content: comp.data.content,
-            textColor: comp.data.textColor,
-            backgroundColor: comp.data.backgroundColor,
-            fontSize: Number(comp.data.fontSize),
-          } as TextData;
-          break;
+          return {
+            id: comp.id || uuidv4(),
+            type: 'text',
+            data: {
+              content: comp.data?.content ?? '',
+              textColor: comp.data?.textColor ?? '#000000',
+              backgroundColor: comp.data?.backgroundColor ?? '#FFFFFF',
+              fontSize: Number(comp.data?.fontSize ?? 14),
+              titleAlignment: comp.data?.titleAlignment ?? 'left',
+            } as TextData,
+          };
         default:
-          componentData = {} as ComponentData;
+          throw new Error(`Unsupported component type: ${comp.type}`);
       }
-      return {
-        id: comp.id || uuidv4(),
-        type: comp.type,
-        data: componentData,
-      };
     });
     const updatedDashboard: DashboardItem = {
-      id: dashboard!.id,
+      ...dashboard!,
       title,
-      components,
+      components: updatedComponents,
+      layouts: dashboard!.layouts ?? {},
+      workbookId: dashboard!.workbookId ?? dashboardContext.currentWorkbookId,
+      userEmail: dashboard!.userEmail ?? dashboardContext.userEmail,
     };
     editDashboard(updatedDashboard);
     message.success('Dashboard updated successfully!');
@@ -133,8 +146,6 @@ const EditDashboard: React.FC = () => {
                       <Option value="text">Text</Option>
                     </Select>
                   </Form.Item>
-
-                {/* Component-Specific Fields */}
                 <Form.Item
                   shouldUpdate={(prevValues, currentValues) =>
                     prevValues.components?.[name]?.type !== currentValues.components?.[name]?.type
@@ -211,7 +222,6 @@ const GanttChartFields: React.FC = () => {
                 >
                   <Input />
                 </Form.Item>
-
                 <Form.Item
                   {...restField}
                   name={[name, 'name']}
@@ -219,7 +229,6 @@ const GanttChartFields: React.FC = () => {
                 >
                   <Input placeholder="Task Name" />
                 </Form.Item>
-
                 <Form.Item
                   {...restField}
                   name={[name, 'start']}
@@ -227,7 +236,6 @@ const GanttChartFields: React.FC = () => {
                 >
                   <Input placeholder="Start Date (YYYY-MM-DD)" />
                 </Form.Item>
-
                 <Form.Item
                   {...restField}
                   name={[name, 'end']}
@@ -235,7 +243,6 @@ const GanttChartFields: React.FC = () => {
                 >
                   <Input placeholder="End Date (YYYY-MM-DD)" />
                 </Form.Item>
-
                 <Form.Item
                   {...restField}
                   name={[name, 'progress']}
@@ -243,18 +250,15 @@ const GanttChartFields: React.FC = () => {
                 >
                   <Input placeholder="Progress (0-100)" type="number" min={0} max={100} />
                 </Form.Item>
-
                 <Form.Item
                   {...restField}
                   name={[name, 'dependencies']}
                 >
                   <Input placeholder="Dependencies (comma-separated IDs)" />
                 </Form.Item>
-
                 <MinusCircleOutlined onClick={() => remove(name)} />
               </Space>
             ))}
-
             <Form.Item>
               <Button
                 type="dashed"
@@ -300,7 +304,6 @@ const ChartFields: React.FC = () => {
           <Option value="pie">Pie</Option>
           <Option value="line">Line</Option>
           <Option value="doughnut">Doughnut</Option>
-          {/* Add more chart types as needed */}
         </Select>
       </Form.Item>
       <Form.Item
@@ -327,7 +330,6 @@ const ChartFields: React.FC = () => {
                 >
                     <Input />
                 </Form.Item>
-
                 <Form.Item
                     {...restField}
                     name={[name, 'label']}
@@ -335,7 +337,6 @@ const ChartFields: React.FC = () => {
                 >
                     <Input placeholder="Dataset Label" />
                 </Form.Item>
-
                 <Form.Item
                     {...restField}
                     name={[name, 'data']}
@@ -343,21 +344,18 @@ const ChartFields: React.FC = () => {
                 >
                     <Input placeholder="Data Points (comma-separated numbers)" />
                 </Form.Item>
-
                 <Form.Item
                     {...restField}
                     name={[name, 'backgroundColor']}
                 >
                     <Input placeholder="Background Color" />
                 </Form.Item>
-
                 <Form.Item
                     {...restField}
                     name={[name, 'borderColor']}
                 >
                     <Input placeholder="Border Color" />
                 </Form.Item>
-
                 <Form.Item
                     {...restField}
                     name={[name, 'borderWidth']}
@@ -365,11 +363,9 @@ const ChartFields: React.FC = () => {
                 >
                     <Input placeholder="Border Width" type="number" min={0} />
                 </Form.Item>
-
                 <MinusCircleOutlined onClick={() => remove(name)} />
                 </Space>
             ))}
-
             <Form.Item>
                 <Button
                 type="dashed"
@@ -427,5 +423,4 @@ const TextFields: React.FC = () => {
     </>
   );
 };
-
 export default EditDashboard;

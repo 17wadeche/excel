@@ -4,17 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { Table, Button } from 'antd';
 import { Task } from '../types';
 import ResizableTitle from './ResizableTable';
-
 interface GanttTableProps {
   tasks: Task[];
 }
-
 const GanttTable: React.FC<GanttTableProps> = ({ tasks }) => {
   const [columns, setColumns] = useState<any[]>([]);
-
   useEffect(() => {
     const initialColumns = [
-      // Excluded Columns: Name, From, To
       {
         title: 'Progress',
         dataIndex: 'progress',
@@ -46,12 +42,9 @@ const GanttTable: React.FC<GanttTableProps> = ({ tasks }) => {
           </span>
         ),
       },
-      // Add other desired columns with width
     ];
-
     setColumns(initialColumns);
   }, []);
-
   const handleResize =
     (index: number) =>
     (_e: React.SyntheticEvent<Element>, { size }: { size: { width: number; height: number } }) => {
@@ -62,7 +55,6 @@ const GanttTable: React.FC<GanttTableProps> = ({ tasks }) => {
       };
       setColumns(nextColumns);
     };
-
   const mergedColumns = columns.map((col, index) => ({
     ...col,
     onHeaderCell: (column: any) => ({
@@ -70,8 +62,6 @@ const GanttTable: React.FC<GanttTableProps> = ({ tasks }) => {
       onResize: handleResize(index),
     }),
   }));
-
-  // Prepare data source without excluding any fields
   const dataSource = tasks.map(task => ({
     key: task.id,
     name: task.name,       // Retained in dataSource but not displayed
@@ -80,9 +70,7 @@ const GanttTable: React.FC<GanttTableProps> = ({ tasks }) => {
     progress: task.progress,
     type: task.type,
     dependencies: task.dependencies,
-    // Include other fields as needed
   }));
-
   return (
     <Table
       components={{
@@ -97,5 +85,4 @@ const GanttTable: React.FC<GanttTableProps> = ({ tasks }) => {
     />
   );
 };
-
 export default GanttTable;

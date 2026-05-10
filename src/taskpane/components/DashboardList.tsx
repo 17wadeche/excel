@@ -19,7 +19,6 @@ import {
 } from 'antd';
 import {
   DeleteOutlined,
-  EyeOutlined,
   EditOutlined,
   PlusOutlined,
   SearchOutlined,
@@ -27,20 +26,16 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { DashboardContext } from '../context/DashboardContext';
 import { DashboardItem } from './types'; // Adjust the path as needed
-
 const { Content } = Layout;
 const { Title } = Typography;
 const { Search } = Input;
-
 const DashboardList: React.FC = () => {
   const { dashboards, deleteDashboard } = useContext(DashboardContext)!;
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredDashboards, setFilteredDashboards] = useState<DashboardItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-
   useEffect(() => {
-    // Simulate loading time
     setLoading(true);
     const timer = setTimeout(() => {
       const filtered = dashboards.filter((dashboard) =>
@@ -49,10 +44,8 @@ const DashboardList: React.FC = () => {
       setFilteredDashboards(filtered);
       setLoading(false);
     }, 300); // Debounce search by 300ms
-
     return () => clearTimeout(timer);
   }, [dashboards, searchTerm]);
-
   const handleDelete = (id: string) => {
     Modal.confirm({
       title: 'Are you sure you want to delete this dashboard?',
@@ -66,23 +59,18 @@ const DashboardList: React.FC = () => {
       maskClosable: true,
     });
   };
-
   const handleView = (id: string) => {
     navigate(`/dashboard/${id}`);
   };
-
   const handleEdit = (id: string) => {
     navigate(`/dashboard/${id}/edit`);
   };
-
   const handleCreateNew = () => {
     navigate('/create');
   };
-
   return (
     <Layout style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
       <Content>
-        {/* Header Section */}
         <Row justify="space-between" align="middle" style={{ marginBottom: '24px' }}>
           <Col>
             <Title level={2} style={{ margin: 0 }}>
@@ -101,8 +89,6 @@ const DashboardList: React.FC = () => {
             </Button>
           </Col>
         </Row>
-
-        {/* Search Bar */}
         <Row justify="center" style={{ marginBottom: '24px' }}>
           <Col xs={24} sm={16} md={12} lg={8}>
             <Search
@@ -115,10 +101,7 @@ const DashboardList: React.FC = () => {
             />
           </Col>
         </Row>
-
         <Divider />
-
-        {/* Dashboard List */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '50px 0' }}>
             <Spin tip="Loading Dashboards..." size="large" />
@@ -195,5 +178,4 @@ const DashboardList: React.FC = () => {
     </Layout>
   );
 };
-
 export default DashboardList;

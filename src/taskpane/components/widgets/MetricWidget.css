@@ -1,7 +1,6 @@
 .metric-widget-container {
   position: relative;
 }
-
 .metric-edit-button {
   display: none;
   position: absolute;
@@ -9,7 +8,6 @@
   right: 5px;
   z-index: 1;
 }
-
 .metric-widget-container:hover .metric-edit-button {
   display: block;
 }

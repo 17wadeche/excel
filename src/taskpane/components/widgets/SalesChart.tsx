@@ -1,66 +1,106 @@
 // src/taskpane/components/widgets/SalesChart.tsx
 
-import React, { useRef, useEffect } from 'react';
-import Draggable from 'react-draggable';
-import annotationPlugin from 'chartjs-plugin-annotation';
+import React, { useRef, useEffect } from "react";
+import Draggable from "react-draggable";
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
   BarElement,
-  PointElement,
   LineElement,
-  ArcElement,
+  PointElement,
+  Title,
+  TimeSeriesScale,
   Tooltip,
   Legend,
-  ChartData as ChartJSData,
-  ChartOptions,
-  ChartDataset,
-  ChartType,
-  TimeScale, // Import TimeScale
-} from 'chart.js';
-import { Chart } from 'react-chartjs-2';
-import 'chartjs-adapter-moment'; // Ensure the adapter is imported
-import zoomPlugin from 'chartjs-plugin-zoom';
-import ChartDataLabels from 'chartjs-plugin-datalabels';
-
+  TimeScale,
+} from "chart.js/auto";
+import { Bar, Line, Pie, Doughnut, Radar, Scatter, Bubble, PolarArea, Chart as BaseChart } from "react-chartjs-2";
+import "chartjs-adapter-moment";
+import { BoxPlotController, BoxAndWiskers } from "@sgratzl/chartjs-chart-boxplot";
+import annotationPlugin from "chartjs-plugin-annotation";
+import zoomPlugin from "chartjs-plugin-zoom";
+import { TreemapController, TreemapElement } from "chartjs-chart-treemap";
+import { FunnelController, TrapezoidElement } from "chartjs-chart-funnel";
+import { HierarchicalScale } from "chartjs-plugin-hierarchical";
+import type { ChartData, ChartOptions, ChartType, ChartDataset } from "chart.js";
+import ChartDataLabels from "chartjs-plugin-datalabels";
 ChartJS.register(
   CategoryScale,
   LinearScale,
-  TimeScale, // Register TimeScale
   BarElement,
-  ChartDataLabels,
-  PointElement,
   LineElement,
-  ArcElement,
+  PointElement,
+  Title,
   Tooltip,
   Legend,
+  TimeScale,
+  TimeSeriesScale,
   zoomPlugin,
   annotationPlugin,
+  ChartDataLabels,
+  TreemapController,
+  TreemapElement,
+  FunnelController,
+  TrapezoidElement,
+  BoxPlotController,
+  BoxAndWiskers,
+  HierarchicalScale
 );
-
-interface ChartData extends ChartJSData {
+const TreemapChart: React.FC<any> = (props) => {
+  return <BaseChart type="treemap" {...props} />;
+};
+const FunnelChart: React.FC<any> = (props) => {
+  return (
+    <BaseChart
+      type="funnel"
+      {...props}
+      options={{
+        ...props.options,
+        plugins: { ...props.options.plugins },
+        elements: { trapezoid: { width: 0.8, spacing: 2 } },
+      }}
+    />
+  );
+};
+const BoxPlotChart: React.FC<any> = (props) => {
+  return <BaseChart type="boxplot" {...props} />;
+};
+const chartComponents: Record<string, React.FC<any>> = {
+  bar: Bar,
+  line: Line,
+  pie: Pie,
+  doughnut: Doughnut,
+  radar: Radar,
+  scatter: Scatter,
+  bubble: Bubble,
+  polarArea: PolarArea,
+  treemap: TreemapChart,
+  funnel: FunnelChart,
+  boxplot: BoxPlotChart,
+};
+interface ExtendedChartData<TType extends ChartType = ChartType, TData = unknown> extends ChartData<TType, TData> {
   title?: string;
-  titleAlignment?: 'left' | 'center' | 'right';
+  titleAlignment?: "left" | "center" | "right";
   scales?: {
     x?: {
-      type?: 'category' | 'linear' | 'logarithmic' | 'time'; // Include 'time'
+      type?: "category" | "linear" | "logarithmic" | "time";
       title?: {
         display?: boolean;
         text?: string;
       };
     };
     y?: {
-      type?: 'category' | 'linear' | 'logarithmic';
+      type?: "category" | "linear" | "logarithmic";
       title?: {
         display?: boolean;
         text?: string;
       };
     };
     y1?: {
-      type?: 'category' | 'linear' | 'logarithmic';
+      type?: "category" | "linear" | "logarithmic";
       display?: boolean;
-      position?: 'left' | 'right';
+      position?: "left" | "right";
       title?: {
         display?: boolean;
         text?: string;
@@ -70,7 +110,7 @@ interface ChartData extends ChartJSData {
   plugins?: {
     legend?: {
       display?: boolean;
-      position?: 'top' | 'left' | 'bottom' | 'right';
+      position?: "top" | "left" | "bottom" | "right";
     };
     tooltip?: {
       enabled?: boolean;
@@ -82,36 +122,33 @@ interface ChartData extends ChartJSData {
   };
   backgroundColor?: string;
   gridLineColor?: string;
-  datasets: ChartDataset[];
-  associatedRange?: string; // Added property
-  chartIndex?: number; // Existing property
+  datasets: ChartDataset<TType, TData>[];
+  associatedRange?: string;
+  chartIndex?: number;
 }
-
 interface SalesChartProps {
-  data: ChartData;
-  type: ChartType;
+  data: ExtendedChartData;
+  type: ChartType | string;
   isPresenterMode?: boolean;
 }
-
 const SalesChart = ({ data, type }: SalesChartProps) => {
   const chartRef = useRef<ChartJS>(null);
-
   useEffect(() => {
     return () => {
       if (chartRef.current) {
-        chartRef.current.destroy(); // Properly destroy the chart instance on unmount
+        chartRef.current.destroy();
       }
     };
   }, []);
-
-  const chartOptions: ChartOptions<ChartType> = {
+  console.log("SalesChart Datasets:", data.datasets);
+  const chartOptions: ChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       title: {
         display: !!data.title,
-        text: data.title || 'Chart',
-        color: '#000',
+        text: data.title || "Chart",
+        color: "#000",
         font: {
           size: 18,
         },
@@ -122,9 +159,9 @@ const SalesChart = ({ data, type }: SalesChartProps) => {
       },
       legend: {
         display: data.plugins?.legend?.display !== false,
-        position: data.plugins?.legend?.position || 'top',
+        position: data.plugins?.legend?.position || "top",
         labels: {
-          color: 'black',
+          color: "black",
           font: {
             size: 14,
           },
@@ -136,69 +173,77 @@ const SalesChart = ({ data, type }: SalesChartProps) => {
     },
     scales: {
       x: {
-        type: data.scales?.x?.type || 'category',
-        time: data.scales?.x?.type === 'time' ? {
-          unit: 'day', // Adjust based on your data granularity
-        } : undefined,
+        type: type === "candlestick" ? "time" : data.scales?.x?.type || "category",
+        time:
+          type === "candlestick"
+            ? {
+                unit: "day",
+                tooltipFormat: "ll",
+                parser: "YYYY-MM-DD",
+              }
+            : data.scales?.x?.type === "time"
+              ? { unit: "day" }
+              : undefined,
         title: {
           display: data.scales?.x?.title?.display !== false,
-          text: data.scales?.x?.title?.text || '',
-          color: '#000',
+          text: data.scales?.x?.title?.text || "",
+          color: "#000",
         },
         ticks: {
-          color: 'black',
+          color: "black",
           autoSkip: false,
           maxRotation: 45,
           minRotation: 0,
         },
         grid: {
-          color: data.gridLineColor || 'rgba(0, 0, 0, 0.2)',
+          color: data.gridLineColor || "rgba(0, 0, 0, 0.2)",
         },
       },
       y: {
-        type: data.scales?.y?.type || 'linear',
-        position: 'left',
+        type: data.scales?.y?.type || "linear",
+        position: "left",
         title: {
           display: data.scales?.y?.title?.display !== false,
-          text: data.scales?.y?.title?.text || '',
-          color: '#000',
+          text: data.scales?.y?.title?.text || "",
+          color: "#000",
         },
         ticks: {
-          color: 'black',
+          color: "black",
           callback: (value: number | string) => Number(value).toLocaleString(),
         },
         grid: {
-          color: data.gridLineColor || 'rgba(0, 0, 0, 0.2)',
+          color: data.gridLineColor || "rgba(0, 0, 0, 0.2)",
         },
       },
       y1: {
-        type: data.scales?.y1?.type || 'linear',
-        position: data.scales?.y1?.position || 'right',
+        type: data.scales?.y1?.type || "linear",
+        position: data.scales?.y1?.position || "right",
         display: data.scales?.y1?.display || false,
         title: {
           display: data.scales?.y1?.title?.display !== false,
-          text: data.scales?.y1?.title?.text || '',
-          color: '#000',
+          text: data.scales?.y1?.title?.text || "",
+          color: "#000",
         },
         grid: {
           drawOnChartArea: false,
         },
         ticks: {
-          color: 'black',
+          color: "black",
         },
       },
     },
   };
-
+  if (type === "treemap") {
+    (chartOptions.plugins as any).treemap = {
+      labels: {
+        display: false,
+      },
+    };
+  }
   const handleChartClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const chart = chartRef.current;
     if (!chart) return;
-    const elements = chart.getElementsAtEventForMode(
-      event.nativeEvent,
-      'nearest',
-      { intersect: true },
-      true
-    );
+    const elements = chart.getElementsAtEventForMode(event.nativeEvent, "nearest", { intersect: true }, true);
     if (elements.length > 0) {
       const datasetIndex = elements[0].datasetIndex;
       const dataIndex = elements[0].index;
@@ -206,34 +251,31 @@ const SalesChart = ({ data, type }: SalesChartProps) => {
       console.log(`Clicked on data point: ${dataValue}`);
     }
   };
-
+  const noAxisTypes = ["pie", "doughnut", "radar", "polarArea", "treemap", "funnel"];
+  if (noAxisTypes.includes(type)) {
+    chartOptions.scales = {};
+  }
+  const SelectedChart = chartComponents[type] || Bar;
   return (
     <Draggable handle=".drag-handle">
       <div
         className="drag-handle"
         style={{
-          width: '100%',
-          height: '100%',
-          position: 'relative',
+          width: "100%",
+          height: "100%",
+          position: "relative",
           margin: 0,
           padding: 0,
-          overflow: 'hidden',
-          backgroundColor: data.backgroundColor || 'white',
-          cursor: 'move',
+          overflow: "hidden",
+          backgroundColor: data.backgroundColor || "white",
+          cursor: "move",
         }}
       >
-        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-          <Chart
-            type={type}
-            data={data}
-            options={chartOptions}
-            ref={chartRef}
-            onClick={handleChartClick}
-          />
+        <div style={{ position: "relative", width: "100%", height: "100%" }}>
+          <SelectedChart data={data} options={chartOptions} ref={chartRef} onClick={handleChartClick} />
         </div>
       </div>
     </Draggable>
   );
 };
-
 export default React.memo(SalesChart);
