@@ -278,3 +278,12 @@
 .color-purple .bar {
   fill: #722ED1; /* Ant Design purple-6 */
 }
+.toolbar-save-status {
+  color: var(--toolbar-icon-color);
+  font-size: 10px;
+  line-height: 1.2;
+  margin: 4px 0;
+  max-width: 72px;
+  text-align: center;
+  word-break: break-word;
+}

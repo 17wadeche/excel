@@ -20,10 +20,11 @@ import {
 } from "../components/types";
 import { v4 as uuidv4 } from "uuid";
 import { Breakpoint, GRID_COLS, WIDGET_SIZES } from "../components/layoutConstants";
-import { message } from "antd";
+import { message, Modal } from "antd";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import axios from "axios";
+import { dashboardApi, templateApi } from "../utils/apiClient";
+import { logger } from "../utils/logger";
 import PromptWidgetDetailsModal from "../components/PromptWidgetDetailsModal";
 import { DashboardBorderSettings } from "../components/types";
 import { getWorkbookIdFromProperties } from "../utils/excelUtils";
@@ -180,11 +181,11 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       if (storedEmail) {
         setUserEmail(storedEmail);
       } else {
-        console.warn("User email not found in localStorage.");
+        logger.warn("User email not found in localStorage.");
         setUserEmail("");
       }
     } catch (error) {
-      console.error("Error fetching user email:", error);
+      logger.error("Error fetching user email:", error);
       message.error("Failed to retrieve user email.");
     }
   };
@@ -193,16 +194,16 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
   }, []);
   useEffect(() => {
     if (currentDashboardId) {
-      console.log(`[DashboardProvider] currentDashboardId changed: ${currentDashboardId}`);
+      logger.debug(`[DashboardProvider] currentDashboardId changed: ${currentDashboardId}`);
     } else {
-      console.log("[DashboardProvider] currentDashboardId is null");
+      logger.debug("[DashboardProvider] currentDashboardId is null");
     }
   }, [currentDashboardId]);
   useEffect(() => {
     if (currentWorkbookId) {
-      console.log(`[DashboardProvider] currentWorkbookId changed: ${currentWorkbookId}`);
+      logger.debug(`[DashboardProvider] currentWorkbookId changed: ${currentWorkbookId}`);
     } else {
-      console.log("[DashboardProvider] currentWorkbookId is empty");
+      logger.debug("[DashboardProvider] currentWorkbookId is empty");
     }
   }, [currentWorkbookId]);
   const setWidgets: React.Dispatch<React.SetStateAction<Widget[]>> = (update) => {
@@ -220,7 +221,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
     const loadCurrentDashboard = async () => {
       if (currentDashboard) return;
       try {
-        const response = await axios.get(`/api/dashboards/${currentDashboardId}`);
+        const response = await dashboardApi.get(currentDashboardId);
         const db: DashboardItem = response.data;
         setCurrentDashboard(db);
         if (db.borderSettings) {
@@ -246,7 +247,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         }
         setDashboardLoaded(true);
       } catch (error) {
-        console.error(`Error loading dashboard ${currentDashboardId}:`, error);
+        logger.error(`Error loading dashboard ${currentDashboardId}:`, error);
         message.error("Failed to load the selected dashboard.");
       }
     };
@@ -255,14 +256,14 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
     }
   }, [currentDashboardId, currentWorkbookId, currentDashboard, dashboardLoaded]);
   const updateWidgetsWithHistory = (updateFn: (prevWidgets: Widget[]) => Widget[]) => {
-    console.log("updateWidgetsWithHistory: Initiating widget update with history.");
+    logger.debug("updateWidgetsWithHistory: Initiating widget update with history.");
     setWidgetsState((prevWidgets: Widget[]) => {
       const newWidgets = updateFn(prevWidgets);
-      console.log("updateWidgetsWithHistory: New widgets after update:", newWidgets);
+      logger.debug("updateWidgetsWithHistory: New widgets after update:", newWidgets);
       setPastStates((prev) => [...prev, { widgets: prevWidgets, layouts }]);
-      console.log("updateWidgetsWithHistory: Past states updated.");
+      logger.debug("updateWidgetsWithHistory: Past states updated.");
       setFutureStates([]);
-      console.log("updateWidgetsWithHistory: Future states cleared.");
+      logger.debug("updateWidgetsWithHistory: Future states cleared.");
       return newWidgets;
     });
   };
@@ -278,7 +279,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
     cellAddress: string
   ): Promise<void> => {
     try {
-      console.log(`Updating widget ${widgetId} with new value ${newValue}`);
+      logger.debug(`Updating widget ${widgetId} with new value ${newValue}`);
       await Excel.run(async (context: Excel.RequestContext) => {
         const sheet = context.workbook.worksheets.getItemOrNullObject(worksheetName);
         sheet.load("name");
@@ -290,7 +291,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         const range = sheet.getRange(cellAddress);
         range.values = [[newValue]];
         await context.sync();
-        console.log(`Setting widget ${widgetId} currentValue to ${newValue}`);
+        logger.debug(`Setting widget ${widgetId} currentValue to ${newValue}`);
         setWidgets((prevWidgets: Widget[]) =>
           prevWidgets.map((widget: Widget) =>
             widget.id === widgetId && widget.type === "metric"
@@ -304,11 +305,11 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
               : widget
           )
         );
-        console.log(`Widget ${widgetId} updated successfully`);
+        logger.debug(`Widget ${widgetId} updated successfully`);
         message.success("Metric value updated successfully!");
       });
     } catch (error: any) {
-      console.error("Error writing metric value:", error);
+      logger.error("Error writing metric value:", error);
     }
   };
   const promptForWidgetDetails = useCallback((widget: Widget, onComplete: (updatedWidget: Widget) => void) => {
@@ -330,11 +331,11 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       const initializeWorkbookId = async () => {
         const rawWorkbookId = await getWorkbookIdFromProperties();
         if (!rawWorkbookId) {
-          console.warn("Workbook ID not found in workbook properties.");
+          logger.warn("Workbook ID not found in workbook properties.");
           return;
         }
         const workbookId = rawWorkbookId.toLowerCase();
-        console.log("Front-End: Retrieved Workbook ID from properties:", workbookId);
+        logger.debug("Front-End: Retrieved Workbook ID from properties:", workbookId);
         setCurrentWorkbookId(workbookId);
       };
       initializeWorkbookId();
@@ -357,7 +358,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         return sheets.items.map((sheet) => sheet.name);
       });
     } catch (error: any) {
-      console.error("Error fetching worksheets:", error);
+      logger.error("Error fetching worksheets:", error);
       return [];
     }
   };
@@ -447,7 +448,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
                   return { ...widget, data: titleData };
                 }
                 default:
-                  console.warn(`Unknown widget type: ${widget.type}. Widget will be skipped.`);
+                  logger.warn(`Unknown widget type: ${widget.type}. Widget will be skipped.`);
                   return null;
               }
             })
@@ -460,7 +461,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
           updateLayoutsForNewWidgets(updatedWidgets);
         }
       } catch (error) {
-        console.error("Error fetching and migrating widgets:", error);
+        logger.error("Error fetching and migrating widgets:", error);
         message.error("Failed to load widgets from server.");
       }
     };
@@ -480,13 +481,13 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         borderSettings: dashboardBorderSettings,
       };
       if (currentTemplateId) {
-        await axios.put(`/api/templates/${currentTemplateId}`, {
+        await templateApi.update(currentTemplateId, {
           ...templateToSave,
           userEmail,
         });
         message.success("Template updated successfully!");
       } else {
-        const response = await axios.post<TemplateItem>("/api/templates", {
+        const response = await templateApi.create({
           ...templateToSave,
           userEmail,
         });
@@ -496,13 +497,13 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         }
       }
     } catch (error) {
-      console.error("Error saving template:", error);
+      logger.error("Error saving template:", error);
       message.error("Failed to save template to the server.");
     }
   };
   const excelSerialToDateString = (serial: number): string => {
     if (typeof serial !== "number" || Number.isNaN(serial)) {
-      console.warn("Invalid Excel serial date:", serial);
+      logger.warn("Invalid Excel serial date:", serial);
       return "";
     }
     const date = new Date((serial - 25569) * 86400000);
@@ -554,12 +555,12 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         if (!existingTable.isNullObject) {
           existingTable.delete();
           await context.sync();
-          console.log("Existing GanttTable deleted.");
+          logger.debug("Existing GanttTable deleted.");
         }
         const entireSheet = sheet.getRange();
         entireSheet.clear(Excel.ClearApplyTo.all);
         await context.sync();
-        console.log("Worksheet cleared.");
+        logger.debug("Worksheet cleared.");
         const headers = [
           "Task Name",
           "Task Type",
@@ -576,13 +577,13 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         headerRange.format.font.bold = true;
         headerRange.format.fill.color = "#4472C4";
         headerRange.format.font.color = "white";
-        console.log("Headers inserted on A1:I1:", headers);
+        logger.debug("Headers inserted on A1:I1:", headers);
         const columnWidths = [25, 15, 15, 15, 15, 18, 22, 12, 20];
         columnWidths.forEach((width, index) => {
           const columnLetter = String.fromCharCode(65 + index);
           sheet.getRange(`${columnLetter}:${columnLetter}`).format.columnWidth = width;
         });
-        console.log("Column widths set:", columnWidths);
+        logger.debug("Column widths set:", columnWidths);
         const parseDate = (dateString: string): Date => {
           const [month, day, year] = dateString.split("/").map(Number);
           return new Date(year, month - 1, day);
@@ -652,7 +653,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         const dataRangeAddress = `A${dataRowStart}:I${dataRowEnd}`;
         const dataRange = sheet.getRange(dataRangeAddress);
         dataRange.values = sampleData;
-        console.log("Sample data inserted on A2:I6:", sampleData);
+        logger.debug("Sample data inserted on A2:I6:", sampleData);
         const dateColumns = ["C", "D", "E"];
         dateColumns.forEach((col) => {
           const range = sheet.getRange(`${col}${dataRowStart}:${col}${dataRowEnd}`);
@@ -667,13 +668,13 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         const progressFormat = "0";
         const progressFormats = Array.from({ length: dataRowEnd - dataRowStart + 1 }, () => [progressFormat]);
         progressRange.numberFormat = progressFormats;
-        console.log("Progress column formatted as number");
+        logger.debug("Progress column formatted as number");
         try {
           const table = sheet.tables.add(`A1:I${dataRowEnd}`, true);
           table.name = "GanttTable";
-          console.log("GanttTable created successfully.");
+          logger.debug("GanttTable created successfully.");
         } catch (tableError) {
-          console.error("Failed to create GanttTable:", tableError);
+          logger.error("Failed to create GanttTable:", tableError);
           throw tableError;
         }
         try {
@@ -691,7 +692,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
           actualDurationRange.formulas = Array(actualDurationRange.rowCount).fill([actualDurationFormula]);
           await context.sync();
         } catch (calcError) {
-          console.error("Error setting calculated columns:", calcError);
+          logger.error("Error setting calculated columns:", calcError);
           throw calcError;
         }
         const taskTypeOptions = ["Task", "Milestone", "Project"];
@@ -715,13 +716,13 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         if (!existingNamedRange.isNullObject) {
           existingNamedRange.delete();
           await context.sync();
-          console.log(`Existing named range "${taskNamesRangeName}" deleted.`);
+          logger.debug(`Existing named range "${taskNamesRangeName}" deleted.`);
         }
         try {
           context.workbook.names.add(taskNamesRangeName, taskNamesRange);
-          console.log(`Named range "${taskNamesRangeName}" created for range ${taskNamesRangeAddress}`);
+          logger.debug(`Named range "${taskNamesRangeName}" created for range ${taskNamesRangeAddress}`);
         } catch (nameError) {
-          console.error(`Error creating named range "${taskNamesRangeName}":`, nameError);
+          logger.error(`Error creating named range "${taskNamesRangeName}":`, nameError);
           throw nameError;
         }
         const dependenciesRangeAddress = `I${dataRowStart}:I${dataRowEnd}`;
@@ -736,7 +737,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         );
         dependenciesRange.dataValidation.load(["rule", "errorAlert", "prompt"]);
         await context.sync();
-        console.log(`Data validation for Dependencies applied to range ${dependenciesRangeAddress}`);
+        logger.debug(`Data validation for Dependencies applied to range ${dependenciesRangeAddress}`);
         const borderEdges = [
           Excel.BorderIndex.edgeTop,
           Excel.BorderIndex.edgeBottom,
@@ -751,17 +752,17 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
           border.weight = Excel.BorderWeight.thin;
           border.color = "#000000";
         });
-        console.log("Borders applied to data range");
+        logger.debug("Borders applied to data range");
         sheet.getUsedRange().format.autofitColumns();
         sheet.getUsedRange().format.autofitRows();
-        console.log("Autofit applied to columns and rows");
+        logger.debug("Autofit applied to columns and rows");
         sheet.freezePanes.freezeRows(1);
-        console.log("Top row frozen");
+        logger.debug("Top row frozen");
         await context.sync();
         message.success("Project management template inserted successfully.");
       });
     } catch (error) {
-      console.error("Error inserting template into Excel:", error);
+      logger.error("Error inserting template into Excel:", error);
       message.error("Failed to insert template into Excel.");
     }
   };
@@ -801,7 +802,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
               typeof endSerial !== "number" ||
               (completedSerial !== "" && typeof completedSerial !== "number")
             ) {
-              console.warn(`Invalid serial numbers for task: ${taskName}, row`);
+              logger.warn(`Invalid serial numbers for task: ${taskName}, row`);
               return null;
             }
             const startDate: Date = excelSerialToDate(startSerial);
@@ -809,15 +810,15 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
             const completedDate: Date | undefined =
               completedSerial !== "" ? excelSerialToDate(completedSerial) : undefined;
             if (!(startDate instanceof Date) || isNaN(startDate.getTime())) {
-              console.warn(`Invalid start date for task: ${taskName}`);
+              logger.warn(`Invalid start date for task: ${taskName}`);
               return null;
             }
             if (!(endDate instanceof Date) || isNaN(endDate.getTime())) {
-              console.warn(`Invalid end date for task: ${taskName}`);
+              logger.warn(`Invalid end date for task: ${taskName}`);
               return null;
             }
             if (completedSerial !== "" && (!completedDate || isNaN(completedDate.getTime()))) {
-              console.warn(`Invalid completed date for task: ${taskName}`);
+              logger.warn(`Invalid completed date for task: ${taskName}`);
               return null;
             }
             const dependencies: string = dependenciesRaw
@@ -880,7 +881,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         });
       });
     } catch (error) {
-      console.error("Error creating Gantt chart:", error);
+      logger.error("Error creating Gantt chart:", error);
       message.error("Failed to create Gantt chart.");
     }
   };
@@ -904,8 +905,8 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
           layouts: previousState.layouts,
           title: dashboardTitle,
         };
-        axios.put(`/api/dashboards/${currentDashboardId}`, updatedDashboard).catch((err) => {
-          console.error("Error syncing undo to server:", err);
+        dashboardApi.update(currentDashboardId, updatedDashboard).catch((err) => {
+          logger.error("Error syncing undo to server:", err);
         });
       }
     }
@@ -926,8 +927,8 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
           layouts: nextState.layouts,
           title: dashboardTitle,
         };
-        axios.put(`/api/dashboards/${currentDashboardId}`, updatedDashboard).catch((err) => {
-          console.error("Error syncing redo to server:", err);
+        dashboardApi.update(currentDashboardId, updatedDashboard).catch((err) => {
+          logger.error("Error syncing redo to server:", err);
         });
       }
     }
@@ -959,8 +960,8 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       title: dashboardTitle,
       borderSettings: dashboardBorderSettings,
     };
-    axios
-      .put(`/api/dashboards/${currentDashboardId}`, updatedDashboard)
+    dashboardApi
+      .update(currentDashboardId, updatedDashboard)
       .then(() => {
         message.success("Dashboard version saved.");
         setCurrentDashboard(updatedDashboard);
@@ -975,7 +976,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         });
       })
       .catch((err) => {
-        console.error("Error saving version to server:", err);
+        logger.error("Error saving version to server:", err);
         message.error("Failed to save dashboard version.");
       });
   };
@@ -999,8 +1000,8 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       layouts: version.layouts,
       title: version.title,
     };
-    axios
-      .put(`/api/dashboards/${currentDashboardId}`, updatedDashboard)
+    dashboardApi
+      .update(currentDashboardId, updatedDashboard)
       .then(() => {
         message.success("Dashboard restored to selected version.");
         setCurrentDashboard(updatedDashboard);
@@ -1015,7 +1016,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         });
       })
       .catch((err) => {
-        console.error("Error restoring version to server:", err);
+        logger.error("Error restoring version to server:", err);
         message.error("Failed to restore version.");
       });
   };
@@ -1062,7 +1063,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       if (!dashboard.userEmail) {
         dashboard.userEmail = userEmail;
       }
-      const response = await axios.put(`/api/dashboards/${dashboard.id}`, dashboard);
+      const response = await dashboardApi.update(dashboard.id, dashboard);
       const updated = response.data as DashboardItem;
       setDashboards((prevDashboards) => {
         const idx = prevDashboards.findIndex((d) => d.id === updated.id);
@@ -1074,7 +1075,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         return prevDashboards;
       });
     } catch (err) {
-      console.error("Error updating dashboard on server:", err);
+      logger.error("Error updating dashboard on server:", err);
       message.error("Failed to update dashboard on server.");
       throw err;
     }
@@ -1091,7 +1092,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       }
       message.success("Dashboard deleted successfully!");
     } catch (err) {
-      console.error("Error deleting dashboard on server:", err);
+      logger.error("Error deleting dashboard on server:", err);
       message.error("Failed to delete dashboard.");
     }
   };
@@ -1108,7 +1109,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         }));
       });
     } catch (error) {
-      console.error("Error fetching tables from Excel:", error);
+      logger.error("Error fetching tables from Excel:", error);
       message.error("Failed to fetch tables from Excel.");
       return [];
     }
@@ -1168,7 +1169,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
           });
           setIsSelectTableModalVisible(true);
         } catch (error) {
-          console.error("Error adding table widget:", error);
+          logger.error("Error adding table widget:", error);
           message.error("Failed to add table widget.");
           return;
         }
@@ -1306,9 +1307,9 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       }
       updateWidgetsWithHistory((prevWidgets) => {
         const newWidgets = [...prevWidgets, newWidget];
-        console.log("addWidgetFunc: New widgets after addition:", newWidgets);
+        logger.debug("addWidgetFunc: New widgets after addition:", newWidgets);
         updateLayoutsForNewWidgets(newWidgets);
-        console.log("addWidgetFunc: Layouts updated for new widgets.");
+        logger.debug("addWidgetFunc: Layouts updated for new widgets.");
         return newWidgets;
       });
     },
@@ -1359,12 +1360,12 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       userEmail: dashboard.userEmail || userEmail,
     };
     try {
-      const response = await axios.post<DashboardItem>('/api/dashboards', payload);
+      const response = await dashboardApi.create(payload);
       const saved = response.data ?? payload;
       setDashboards((prev) => [...prev, saved]);
       return saved;
     } catch (err) {
-      console.error('Error creating dashboard on server:', err);
+      logger.error('Error creating dashboard on server:', err);
       setDashboards((prev) => [...prev, payload]);
       throw err;
     }
@@ -1510,7 +1511,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
   );
   const migrateChartIndexToAssociatedRange = async () => {
     if (!currentDashboardId || !currentDashboard) {
-      console.warn("No current dashboard available for migration.");
+      logger.warn("No current dashboard available for migration.");
       return;
     }
     try {
@@ -1532,7 +1533,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
               worksheetName: sheet.name,
               associatedRange,
             };
-            console.log(
+            logger.debug(
               `Mapped chartIndex ${globalChartIndex} from chart "${chart.name}" to fallback range "${associatedRange}" on worksheet "${sheet.name}".`
             );
             globalChartIndex++;
@@ -1555,7 +1556,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
                     },
                   };
                 }
-                console.warn(`No mapping found for chartIndex ${chartIndex} in ImageWidget ${widget.id}.`);
+                logger.warn(`No mapping found for chartIndex ${chartIndex} in ImageWidget ${widget.id}.`);
               }
               return widget;
             }
@@ -1574,7 +1575,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
                     },
                   };
                 }
-                console.warn(`No mapping found for chartIndex ${chartIndex} in ChartWidget ${widget.id}.`);
+                logger.warn(`No mapping found for chartIndex ${chartIndex} in ChartWidget ${widget.id}.`);
               }
               return widget;
             }
@@ -1595,27 +1596,27 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
             ...currentDashboard,
             components: cleanedWidgets,
           };
-          axios
-            .put(`/api/dashboards/${currentDashboardId}`, updatedDashboard)
+          dashboardApi
+            .update(currentDashboardId, updatedDashboard as DashboardItem)
             .then(() => {
               message.success("Widgets migrated to use associatedRange successfully.");
             })
             .catch((err) => {
-              console.error("Error updating widgets on server:", err);
+              logger.error("Error updating widgets on server:", err);
               message.error("Failed to update migrated widgets on server.");
             });
           return cleanedWidgets;
         });
-        console.log("Migration from chartIndex to associatedRange completed.");
+        logger.debug("Migration from chartIndex to associatedRange completed.");
       });
     } catch (error) {
-      console.error("Error migrating widgets:", error);
+      logger.error("Error migrating widgets:", error);
       message.error("Failed to migrate widgets to use associatedRange.");
     }
   };
   const importChartImageFromExcel = async () => {
     if (!currentDashboardId || !currentDashboard) {
-      console.warn("No current dashboard ID or dashboard available.");
+      logger.warn("No current dashboard ID or dashboard available.");
       return;
     }
     try {
@@ -1651,13 +1652,13 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
               ...currentDashboard,
               components: updatedWidgets,
             };
-            axios
-              .put(`/api/dashboards/${currentDashboardId}`, updatedDashboard)
+            dashboardApi
+              .update(currentDashboardId, updatedDashboard as DashboardItem)
               .then(() => {
                 message.success("All chart images imported and updated successfully.");
               })
               .catch((err) => {
-                console.error("Error updating widgets on server:", err);
+                logger.error("Error updating widgets on server:", err);
                 message.error("Failed to update widgets with imported images on server.");
               });
 
@@ -1668,7 +1669,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         }
       });
     } catch (error) {
-      console.error("Error importing chart image from Excel:", error);
+      logger.error("Error importing chart image from Excel:", error);
       message.error("Failed to import chart image from Excel.");
     }
   };
@@ -1759,12 +1760,12 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
               const key = `${chartData.worksheetName?.toLowerCase()}!${chartData.associatedRange?.toLowerCase()}`;
               const range = rangeMap[key];
               if (!range) {
-                console.warn(`Range "${key}" not found for Chart widget "${widget.id}".`);
+                logger.warn(`Range "${key}" not found for Chart widget "${widget.id}".`);
                 return widget;
               }
               const data = range.values as any[][];
               if (!data || data.length < 2 || data[0].length < 2) {
-                console.warn(
+                logger.warn(
                   `Not enough data in range "${key}" for Chart widget "${widget.id}". ` +
                     `Expected at least 2 rows and 2 columns.`
                 );
@@ -1777,7 +1778,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
                 const funnelValues: number[] = [];
                 data.forEach((row, index) => {
                   if (row.length < 2) {
-                    console.warn(`Row ${index + 1} in range "${key}" is incomplete.`);
+                    logger.warn(`Row ${index + 1} in range "${key}" is incomplete.`);
                     return;
                   }
                   const label = row[0];
@@ -1786,11 +1787,11 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
                     labels.push(label);
                     funnelValues.push(value);
                   } else {
-                    console.warn(`Invalid value at row ${index + 1} in range "${key}".`);
+                    logger.warn(`Invalid value at row ${index + 1} in range "${key}".`);
                   }
                 });
                 if (labels.length !== funnelValues.length) {
-                  console.warn(`Mismatch between labels and data points for Funnel chart "${widget.id}".`);
+                  logger.warn(`Mismatch between labels and data points for Funnel chart "${widget.id}".`);
                   return widget;
                 }
                 const existingDS = chartData.datasets[0] || {};
@@ -1946,7 +1947,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
                 };
                 return { ...widget, data: updatedChartData };
               } else {
-                console.warn(`Chart type "${chartData.type}" not explicitly handled; leaving data unmodified.`);
+                logger.warn(`Chart type "${chartData.type}" not explicitly handled; leaving data unmodified.`);
                 return widget;
               }
             }
@@ -1964,10 +1965,10 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
                   };
                   return { ...widget, data: updatedData };
                 } else {
-                  console.warn(`The value in ${metricData.worksheetName}!${metricData.cellAddress} is not a number.`);
+                  logger.warn(`The value in ${metricData.worksheetName}!${metricData.cellAddress} is not a number.`);
                 }
               } else {
-                console.warn(`Range ${key} not found for Metric Widget ${widget.id}.`);
+                logger.warn(`Range ${key} not found for Metric Widget ${widget.id}.`);
               }
               return widget;
             }
@@ -1982,10 +1983,10 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
             components: updatedWidgets,
           };
           try {
-            await axios.put(`/api/dashboards/${currentDashboard.id}`, updatedDashboard);
+            await dashboardApi.update(currentDashboard.id, updatedDashboard);
             message.success("Charts and metrics have been refreshed and saved successfully.");
           } catch (err) {
-            console.error("Error updating dashboard on server:", err);
+            logger.error("Error updating dashboard on server:", err);
             message.error("Failed to update dashboard on server.");
           }
           setCurrentDashboard(updatedDashboard);
@@ -1996,10 +1997,10 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       await importChartImageFromExcel();
     } catch (error) {
       if (error instanceof OfficeExtension.Error) {
-        console.error(`Office.js Error: ${error.code} - ${error.message}`);
+        logger.error(`Office.js Error: ${error.code} - ${error.message}`);
         message.error(`Office.js Error: ${error.code} - ${error.message}`);
       } else {
-        console.error("Unexpected Error:", error);
+        logger.error("Unexpected Error:", error);
         message.error("An unexpected error occurred while refreshing charts.");
       }
     }
@@ -2078,7 +2079,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       if (error.code === "InvalidOperationInCellEditMode") {
         message.error("Excel is in cell-editing mode. Please press Enter or Esc...");
       } else {
-        console.error("Error refreshing table data:", error);
+        logger.error("Error refreshing table data:", error);
         message.error("Failed to refresh table data.");
       }
     }
@@ -2118,7 +2119,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         } as TableData);
       });
     } catch (error) {
-      console.error("Error reading table data from Excel", error);
+      logger.error("Error reading table data from Excel", error);
       message.error("Failed to read table data from Excel.");
     }
   }
@@ -2164,19 +2165,19 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         }
       });
     } catch (error) {
-      console.error("Error reading data from Excel:", error);
+      logger.error("Error reading data from Excel:", error);
       message.error("Failed to read data from Excel.");
     }
   };
   const readGanttDataFromExcel = async () => {
-    console.log(
+    logger.debug(
       `[DashboardProvider] readGanttDataFromExcel => currentDashboardId: ${currentDashboardId}, currentWorkbookId: ${currentWorkbookId}`
     );
     if (!currentDashboardId) {
-      console.warn("No current dashboard ID found. Will not save changes to server, but will update local state.");
+      logger.warn("No current dashboard ID found. Will not save changes to server, but will update local state.");
     }
     if (!currentWorkbookId) {
-      console.warn("No workbook ID found. Proceeding without blocking...");
+      logger.warn("No workbook ID found. Proceeding without blocking...");
     }
     try {
       await Excel.run(async (context: Excel.RequestContext) => {
@@ -2184,7 +2185,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         sheet.load("name");
         await context.sync();
         if (sheet.name !== "Gantt") {
-          console.log("Not on Gantt sheet. Exiting readGanttDataFromExcel.");
+          logger.debug("Not on Gantt sheet. Exiting readGanttDataFromExcel.");
           return;
         }
         const table = sheet.tables.getItemOrNullObject("GanttTable");
@@ -2216,7 +2217,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
               typeof endSerial !== "number" ||
               (completedSerial !== "" && typeof completedSerial !== "number")
             ) {
-              console.warn(`Invalid serial numbers for task: ${taskName}, row`);
+              logger.warn(`Invalid serial numbers for task: ${taskName}, row`);
               return null;
             }
             const startDate = excelSerialToDateString(startSerial);
@@ -2264,7 +2265,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
                   },
                 };
               } else {
-                console.warn(`Widget with id ${widget.id} is not a Gantt widget`);
+                logger.warn(`Widget with id ${widget.id} is not a Gantt widget`);
                 return widget;
               }
             });
@@ -2289,17 +2290,17 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
             components: widgets,
           };
           try {
-            await axios.put(`/api/dashboards/${currentDashboard.id}`, updatedDashboard);
+            await dashboardApi.update(currentDashboard.id, updatedDashboard);
             message.success("Gantt chart data loaded from Excel and saved successfully.");
           } catch (err) {
-            console.error("Error updating dashboard on server:", err);
+            logger.error("Error updating dashboard on server:", err);
             message.error("Failed to update dashboard on server.");
           }
           setCurrentDashboard(updatedDashboard);
         }
       });
     } catch (error) {
-      console.error("Error reading Gantt data from Excel:", error);
+      logger.error("Error reading Gantt data from Excel:", error);
       message.error("Failed to read Gantt data from Excel.");
     } finally {
       isReadGanttDataInProgress.current = false;
@@ -2313,7 +2314,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
         return;
       }
       if (currentWorkbookId.toLowerCase() !== currentDashboard.workbookId.toLowerCase()) {
-        console.warn("Current workbook does not match the dashboard workbook. Skipping event handler setup.");
+        logger.warn("Current workbook does not match the dashboard workbook. Skipping event handler setup.");
         return;
       }
       await Excel.run(async (context) => {
@@ -2325,14 +2326,14 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
             registeredWidgets.add(widget.id);
             const metricData = widget.data as MetricData;
             if (!isValidCellAddress(metricData.cellAddress)) {
-              console.warn(`Invalid cell address for widget ${widget.id}: ${metricData.cellAddress}`);
+              logger.warn(`Invalid cell address for widget ${widget.id}: ${metricData.cellAddress}`);
               continue;
             }
             const sheet = context.workbook.worksheets.getItemOrNullObject(metricData.worksheetName);
             sheet.load("name");
             await context.sync();
             if (sheet.isNullObject) {
-              console.warn(`Worksheet ${metricData.worksheetName} not found.`);
+              logger.warn(`Worksheet ${metricData.worksheetName} not found.`);
               continue;
             }
             const range = sheet.getRange(metricData.cellAddress);
@@ -2349,7 +2350,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
           }
         }
       }).catch((error) => {
-        console.error("Error setting up event handlers:", error);
+        logger.error("Error setting up event handlers:", error);
       });
     };
     setupMetricEventHandlers();
@@ -2362,41 +2363,41 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
   }, [widgets, currentDashboardId, currentWorkbookId]);
   useEffect(() => {
     const setupGanttEventHandlers = async () => {
-      console.log("[setupGanttEventHandlers] Checking preconditions...");
+      logger.debug("[setupGanttEventHandlers] Checking preconditions...");
       if (!currentDashboard || !currentDashboard.workbookId || !currentWorkbookId) {
-        console.log("[setupGanttEventHandlers] Missing currentDashboard or workbookId. Skipping...");
+        logger.debug("[setupGanttEventHandlers] Missing currentDashboard or workbookId. Skipping...");
         return;
       }
       if (currentWorkbookId.toLowerCase() !== currentDashboard.workbookId.toLowerCase()) {
-        console.warn("[setupGanttEventHandlers] Workbook mismatch. Skipping...");
+        logger.warn("[setupGanttEventHandlers] Workbook mismatch. Skipping...");
         return;
       }
       if (isGanttHandlerRegistered.current) {
-        console.log("[setupGanttEventHandlers] Gantt handler already registered...");
+        logger.debug("[setupGanttEventHandlers] Gantt handler already registered...");
         return;
       }
       try {
         await Excel.run(async (context: Excel.RequestContext) => {
-          console.log("[setupGanttEventHandlers] Starting Excel.run...");
+          logger.debug("[setupGanttEventHandlers] Starting Excel.run...");
           const sheet = context.workbook.worksheets.getItemOrNullObject("Gantt");
           sheet.load("name");
           await context.sync();
           if (sheet.isNullObject) {
-            console.warn("[setupGanttEventHandlers] Gantt worksheet not found. Aborting...");
+            logger.warn("[setupGanttEventHandlers] Gantt worksheet not found. Aborting...");
             return;
           }
-          console.log("[setupGanttEventHandlers] Found Gantt worksheet. Adding onChanged event...");
+          logger.debug("[setupGanttEventHandlers] Found Gantt worksheet. Adding onChanged event...");
           const eventHandler = async (event: Excel.WorksheetChangedEventArgs) => {
-            console.log("[setupGanttEventHandlers] Gantt onChanged event fired!", event.address);
+            logger.debug("[setupGanttEventHandlers] Gantt onChanged event fired!", event.address);
             await readGanttDataFromExcel();
           };
           sheet.onChanged.add(eventHandler);
           ganttEventHandlersRef.current.push(eventHandler);
           isGanttHandlerRegistered.current = true;
-          console.log("[setupGanttEventHandlers] Gantt event handler successfully set up.");
+          logger.debug("[setupGanttEventHandlers] Gantt event handler successfully set up.");
         });
       } catch (error) {
-        console.error("[setupGanttEventHandlers] Error setting up Gantt event handlers:", error);
+        logger.error("[setupGanttEventHandlers] Error setting up Gantt event handlers:", error);
       }
     };
     setupGanttEventHandlers();
@@ -2408,19 +2409,19 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
             sheet.load("name");
             await context.sync();
             if (sheet.isNullObject) {
-              console.warn("[setupGanttEventHandlers] Cleanup: Gantt sheet not found.");
+              logger.warn("[setupGanttEventHandlers] Cleanup: Gantt sheet not found.");
               return;
             }
-            console.log("[setupGanttEventHandlers] Cleanup: removing onChanged handlers...");
+            logger.debug("[setupGanttEventHandlers] Cleanup: removing onChanged handlers...");
             ganttEventHandlersRef.current.forEach((handler) => {
               sheet.onChanged.remove(handler);
             });
             ganttEventHandlersRef.current = [];
             isGanttHandlerRegistered.current = false;
-            console.log("[setupGanttEventHandlers] Cleanup: all Gantt event handlers removed.");
+            logger.debug("[setupGanttEventHandlers] Cleanup: all Gantt event handlers removed.");
           });
         } catch (error) {
-          console.error("[setupGanttEventHandlers] Cleanup: Error removing Gantt handlers:", error);
+          logger.error("[setupGanttEventHandlers] Cleanup: Error removing Gantt handlers:", error);
         }
       };
       removeGanttEventHandlers();
@@ -2431,13 +2432,13 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
     return cellAddressRegex.test(address);
   };
   const addTaskToGantt = async (newTask: Task) => {
-    console.log(`[DashboardProvider] addTaskToGantt => ID: ${currentDashboardId}, workbookId: ${currentWorkbookId}`);
+    logger.debug(`[DashboardProvider] addTaskToGantt => ID: ${currentDashboardId}, workbookId: ${currentWorkbookId}`);
     if (!currentWorkbookId) {
       message.error("No workbook ID found. Please open or re-open the correct workbook.");
       return;
     }
     if (!currentDashboardId) {
-      console.warn(
+      logger.warn(
         "No current dashboard ID found. The task will be added locally and to Excel, but not saved to server yet."
       );
     }
@@ -2520,16 +2521,16 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
           components: updatedWidgets,
         };
         try {
-          await axios.put(`/api/dashboards/${currentDashboard.id}`, updatedDashboard);
+          await dashboardApi.update(currentDashboard.id, updatedDashboard);
           message.success("Task added successfully and synced to Excel and server!");
         } catch (err) {
-          console.error("Error updating dashboard on server:", err);
+          logger.error("Error updating dashboard on server:", err);
           message.error("Failed to update dashboard on server.");
         }
         setCurrentDashboard(updatedDashboard);
       }
     } catch (error) {
-      console.error("Error adding task to Gantt widget and Excel:", error);
+      logger.error("Error adding task to Gantt widget and Excel:", error);
       if (error instanceof OfficeExtension.Error) {
         message.error(`Office.js Error: ${error.code} - ${error.message}`);
       } else {
@@ -2542,34 +2543,34 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
   };
   const updateMetricValue = async (widgetId: string) => {
     try {
-      console.log(`Updating metric value for widget ID: ${widgetId}`);
+      logger.debug(`Updating metric value for widget ID: ${widgetId}`);
       await Excel.run(async (context) => {
         const widgetIndex = widgets.findIndex((w) => w.id === widgetId);
         if (widgetIndex !== -1 && widgets[widgetIndex].type === "metric") {
           const metricData = widgets[widgetIndex].data as MetricData;
           if (!isValidCellAddress(metricData.cellAddress)) {
-            console.warn(`Invalid cell address for widget ${widgetId}: ${metricData.cellAddress}`);
+            logger.warn(`Invalid cell address for widget ${widgetId}: ${metricData.cellAddress}`);
             message.error("Invalid cell address specified for the metric widget.");
             return;
           }
-          console.log(`Fetching value from ${metricData.worksheetName}!${metricData.cellAddress}`);
+          logger.debug(`Fetching value from ${metricData.worksheetName}!${metricData.cellAddress}`);
           const sheet = context.workbook.worksheets.getItem(metricData.worksheetName);
           const range = sheet.getRange(metricData.cellAddress);
           range.load("values");
           await context.sync();
           const cellValue = range.values[0][0];
-          console.log(`Retrieved cell value: ${cellValue}`);
+          logger.debug(`Retrieved cell value: ${cellValue}`);
           const newValue = parseFloat(cellValue);
-          console.log(`Parsed new value: ${newValue}`);
+          logger.debug(`Parsed new value: ${newValue}`);
           if (isNaN(newValue)) {
-            console.warn(`The value in ${metricData.worksheetName}!${metricData.cellAddress} is not a number.`);
+            logger.warn(`The value in ${metricData.worksheetName}!${metricData.cellAddress} is not a number.`);
             message.warning(
               `The value in ${metricData.worksheetName}!${metricData.cellAddress} is not a valid number.`
             );
             return;
           }
           if (metricData.currentValue === newValue) {
-            console.log("Metric value has not changed, skipping update.");
+            logger.debug("Metric value has not changed, skipping update.");
             return;
           }
           updateWidgetsWithHistory((prevWidgets) => {
@@ -2587,55 +2588,81 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
             });
           });
         } else {
-          console.warn(`Widget with ID ${widgetId} not found or is not a metric widget.`);
+          logger.warn(`Widget with ID ${widgetId} not found or is not a metric widget.`);
         }
       });
     } catch (error) {
-      console.error("Error updating metric value:", error);
+      logger.error("Error updating metric value:", error);
       message.error("Failed to update metric value. Please ensure the cell address is valid.");
     }
   };
-  const exportDashboardAsPDF = async (): Promise<void> => {
+  const buildDashboardPdf = async (): Promise<{ pdf: jsPDF; fileName: string }> => {
     const container = document.getElementById("dashboard-container");
     if (!container) {
-      message.error("Dashboard container not found.");
-      return;
+      throw new Error("Dashboard container not found.");
     }
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const containerWidth = container.scrollWidth + 5;
+    const containerHeight = container.scrollHeight + 5;
+    const canvas = await html2canvas(container, {
+      useCORS: true,
+      backgroundColor: dashboardBorderSettings.backgroundColor || "#FFF",
+      width: containerWidth,
+      height: containerHeight,
+      scale: 2,
+      scrollX: 0,
+      scrollY: 0,
+    });
+    const margin = 20;
+    const canvasWidthPx = canvas.width;
+    const canvasHeightPx = canvas.height;
+    const pdf = new jsPDF("p", "pt", [canvasWidthPx + margin * 2, canvasHeightPx + margin * 2]);
+    pdf.addImage(canvas.toDataURL("image/png"), "PNG", margin, margin, canvasWidthPx, canvasHeightPx);
+    const safeTitle = (dashboardTitle || currentDashboard?.title || "dashboard")
+      .replace(/[^a-z0-9-_]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase();
+    return { pdf, fileName: `${safeTitle || "dashboard"}.pdf` };
+  };
+  const exportDashboardAsPDF = async (): Promise<void> => {
     try {
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-      const containerWidth = container.scrollWidth + 5;
-      const containerHeight = container.scrollHeight + 5;
-      const canvas = await html2canvas(container, {
-        useCORS: true,
-        backgroundColor: "#FFF",
-        width: containerWidth,
-        height: containerHeight,
-        scale: 2,
-      });
-      const imgData = canvas.toDataURL("image/png");
-      const margin = 20;
-      const canvasWidthPx = canvas.width;
-      const canvasHeightPx = canvas.height;
-      const pdf = new jsPDF("p", "pt", [canvasWidthPx + margin * 2, canvasHeightPx + margin * 2]);
-      pdf.addImage(imgData, "PNG", margin, margin, canvasWidthPx, canvasHeightPx);
-      pdf.save("dashboard.pdf");
-      message.success("Dashboard exported as PDF successfully!");
+      const { pdf, fileName } = await buildDashboardPdf();
+      pdf.save(fileName);
+      message.success(`Dashboard exported as ${fileName}.`);
     } catch (error) {
-      console.error("Error exporting dashboard as PDF:", error);
-      message.error("Failed to export dashboard as PDF.");
+      logger.error("Error exporting dashboard as PDF:", error);
+      message.error(error instanceof Error ? error.message : "Failed to export dashboard as PDF.");
     }
   };
   const emailDashboard = () => {
-    exportDashboardAsPDF()
-      .then(() => {
-        const mailtoLink = `mailto:?subject=Dashboard&body=Please find the attached dashboard.`;
-        window.location.href = mailtoLink;
-        message.info("Please attach the downloaded PDF to your email.");
-      })
-      .catch((error) => {
-        console.error("Error exporting dashboard as PDF:", error);
-        message.error("Failed to export dashboard as PDF.");
-      });
+    Modal.confirm({
+      title: "Prepare dashboard email",
+      content:
+        "The add-in will download a fresh PDF and open your email client. Office add-ins cannot attach local files automatically, so attach the downloaded PDF before sending.",
+      okText: "Download and open email",
+      cancelText: "Cancel",
+      onOk: async () => {
+        try {
+          const { pdf, fileName } = await buildDashboardPdf();
+          const blob = pdf.output("blob");
+          const downloadUrl = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = downloadUrl;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(downloadUrl);
+          const subject = encodeURIComponent(currentDashboard?.title || dashboardTitle || "Dashboard");
+          const body = encodeURIComponent(`Please find the attached dashboard PDF (${fileName}).`);
+          window.location.href = `mailto:?subject=${subject}&body=${body}`;
+          message.info(`Attach ${fileName} to the email before sending.`);
+        } catch (error) {
+          logger.error("Error preparing dashboard email:", error);
+          message.error(error instanceof Error ? error.message : "Failed to prepare dashboard email.");
+        }
+      },
+    });
   };
   const applyDataValidation = async () => {
     try {
@@ -2666,9 +2693,9 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       });
     } catch (error) {
       if (error instanceof OfficeExtension.Error) {
-        console.error(`Office.js Error: ${error.code} - ${error.message}`);
+        logger.error(`Office.js Error: ${error.code} - ${error.message}`);
       } else {
-        console.error("Unexpected Error:", error);
+        logger.error("Unexpected Error:", error);
       }
       message.error("Failed to apply data validation.");
     }

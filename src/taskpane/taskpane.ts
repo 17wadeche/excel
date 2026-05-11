@@ -1,7 +1,6 @@
-/* global Excel console */
-
+/* global Excel */
+import { logger } from "./utils/logger";
 export async function insertText(text: string) {
-  // Write text to the top left cell.
   try {
     await Excel.run(async (context) => {
       const sheet = context.workbook.worksheets.getActiveWorksheet();
@@ -11,6 +10,6 @@ export async function insertText(text: string) {
       await context.sync();
     });
   } catch (error) {
-    console.log("Error: " + error);
+    logger.debug("Error: " + error);
   }
 }

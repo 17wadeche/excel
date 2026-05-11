@@ -1,5 +1,6 @@
 // src/taskpane/components/widgets/AddTaskForm.tsx
 import React, { useContext, useMemo } from "react";
+import { logger } from "../../utils/logger";
 import { Modal, Form, Input, DatePicker, InputNumber, Select, Button } from "antd";
 import { DashboardContext } from "../../context/DashboardContext";
 import { Task } from "../types";
@@ -14,7 +15,7 @@ const AddTaskForm: React.FC<AddTaskFormProps> = ({ visible, onCancel }) => {
   const [form] = Form.useForm();
   const dashboardContext = useContext(DashboardContext);
   if (!dashboardContext) {
-    console.error("DashboardContext is undefined");
+    logger.error("DashboardContext is undefined");
     return null;
   }
   const { addTaskToGantt, widgets } = dashboardContext;
@@ -48,7 +49,7 @@ const AddTaskForm: React.FC<AddTaskFormProps> = ({ visible, onCancel }) => {
       form.resetFields();
       onCancel();
     } catch (error) {
-      console.log("Validate Failed or Add Task Failed:", error);
+      logger.debug("Validate Failed or Add Task Failed:", error);
     }
   };
   return (

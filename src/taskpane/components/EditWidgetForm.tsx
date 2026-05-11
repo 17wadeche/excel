@@ -1,6 +1,7 @@
 /// <reference types="office-js" />
 // src/taskpane/components/EditWidgetForm.tsx
 import React, { useEffect, useState, useContext } from "react";
+import { logger } from "../utils/logger";
 import { Form, Input, Space, Button, InputNumber, message, Select, Switch, Collapse, Radio } from "antd";
 import {
   MinusCircleOutlined,
@@ -367,7 +368,7 @@ const EditWidgetForm: React.FC<EditWidgetFormProps> = ({ widget, onSubmit, onCan
                   });
                 }
               } catch (e) {
-                console.warn("BoxPlot data parse failed:", rawData, e);
+                logger.warn("BoxPlot data parse failed:", rawData, e);
               }
               return {
                 label: ds.label,
@@ -745,7 +746,7 @@ const EditWidgetForm: React.FC<EditWidgetFormProps> = ({ widget, onSubmit, onCan
         dataRange.load("values");
         await context.sync();
         const data = dataRange.values;
-        console.log(`Loaded data for chartType="${mainType}":`, data);
+        logger.debug(`Loaded data for chartType="${mainType}":`, data);
         if (["bar", "line", "pie", "doughnut", "radar", "polarArea"].includes(mainType)) {
           if (data.length < 2) {
             message.error("Selected range must have at least 2 rows (header + data).");
@@ -841,7 +842,7 @@ const EditWidgetForm: React.FC<EditWidgetFormProps> = ({ widget, onSubmit, onCan
         }
       });
     } catch (err) {
-      console.error("Error loading Excel data:", err);
+      logger.error("Error loading Excel data:", err);
       message.error("Failed to load data from Excel.");
     }
   };
@@ -1616,7 +1617,7 @@ const EditWidgetForm: React.FC<EditWidgetFormProps> = ({ widget, onSubmit, onCan
                       });
                     });
                   } catch (err) {
-                    console.error("Error selecting cell:", err);
+                    logger.error("Error selecting cell:", err);
                     message.error("Failed to select cell from Excel.");
                   }
                 }

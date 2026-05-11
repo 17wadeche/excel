@@ -1,4 +1,5 @@
 // src/taskpane/components/widgets/MetricWidget.tsx
+import { logger } from "../../utils/logger";
 import React, { useEffect, useState, useContext } from "react";
 import { Typography, Button, InputNumber, Tooltip, message } from "antd";
 import { ArrowUpOutlined, ArrowDownOutlined, EditOutlined, CheckOutlined, CloseOutlined } from "@ant-design/icons";
@@ -16,7 +17,7 @@ const MetricWidget: React.FC<MetricWidgetProps> = ({ id, data }) => {
   const [inputValue, setInputValue] = useState<number>(data.currentValue || 0);
   const [isLoading, setIsLoading] = useState(false);
   useEffect(() => {
-    console.log("MetricWidget data:", data);
+    logger.debug("MetricWidget data:", data);
     setInputValue(data.currentValue || 0);
   }, [data]);
   const currentValue = data.currentValue;
@@ -58,9 +59,9 @@ const MetricWidget: React.FC<MetricWidgetProps> = ({ id, data }) => {
     setIsLoading(true);
     try {
       await writeMetricValue(id, inputValue, data.worksheetName, data.cellAddress);
-      console.log("Metric updated successfully.");
+      logger.debug("Metric updated successfully.");
     } catch (error) {
-      console.error("Error updating metric:", error);
+      logger.error("Error updating metric:", error);
       message.error("Failed to update metric.");
     } finally {
       setIsLoading(false);

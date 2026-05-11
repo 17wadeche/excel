@@ -1,5 +1,4 @@
 // src/taskpane/components/DashboardList.tsx
-
 import React, { useContext, useState, useEffect } from 'react';
 import {
   Layout,
@@ -63,7 +62,7 @@ const DashboardList: React.FC = () => {
     navigate(`/dashboard/${id}`);
   };
   const handleEdit = (id: string) => {
-    navigate(`/dashboard/${id}/edit`);
+    navigate(`/edit-dashboard/${id}`);
   };
   const handleCreateNew = () => {
     navigate('/create');
@@ -129,7 +128,7 @@ const DashboardList: React.FC = () => {
                       <Button
                         type="text"
                         icon={<EditOutlined />}
-                        onClick={() => handleView(dashboard.id)}
+                        onClick={() => handleEdit(dashboard.id)}
                       />
                     </Tooltip>,
                     <Tooltip title="Delete Dashboard" key="delete">

@@ -51,7 +51,8 @@ import LineWidget from "./widgets/LineWidget";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import PresentationDashboard from "./PresentationDashboard";
-import axios from "axios";
+import { dashboardApi } from "../utils/apiClient";
+import { logger } from "../utils/logger";
 import { useParams } from "react-router-dom";
 const defaultTitleWidget: Widget = {
   id: "dashboard-title",
@@ -179,6 +180,10 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
     const [isPresentationMode] = useState(false);
     const [fullScreenDialog] = useState<Office.Dialog | null>(null);
     const [isAutoSaveEnabled, setIsAutoSaveEnabled] = useState<boolean>(false);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+    const [saveStatusMessage, setSaveStatusMessage] = useState("Saved");
+    const hasTrackedInitialDashboardState = useRef(false);
     const dashboardWidth = dashboardBorderSettings.width
       ? Math.min(Math.max(dashboardBorderSettings.width, 300), 733)
       : 733;
@@ -213,7 +218,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
       );
       const widgetsWithoutLayout = widgets.filter((widget) => !layoutItemIds.has(widget.id));
       if (widgetsWithoutLayout.length > 0) {
-        console.log(
+        logger.debug(
           "Adding layouts for new widgets:",
           widgetsWithoutLayout.map((w) => w.id)
         );
@@ -335,7 +340,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
           title: dashboardTitle,
           borderSettings: dashboardBorderSettings,
         };
-        const res = await axios.put(`/api/dashboards/${currentDashboardId}`, updatedDashboard);
+        const res = await dashboardApi.update(currentDashboardId, updatedDashboard);
         const savedDashboard = res.data;
         setCurrentDashboard(savedDashboard);
         setDashboards((prev: DashboardItem[]) => {
@@ -348,9 +353,13 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
             return newDashboards;
           }
         });
+        setHasUnsavedChanges(false);
+        setLastSavedAt(new Date());
+        setSaveStatusMessage("Saved");
         message.success("Dashboard saved successfully!");
       } catch (err) {
-        console.error("Error saving dashboard:", err);
+        logger.error("Error saving dashboard:", err);
+        setSaveStatusMessage("Save failed - local changes not synced");
         message.error("Failed to save changes to server.");
       } finally {
         setIsSaving(false);
@@ -376,17 +385,33 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
           if (!isSavingRef.current) {
             await handleSave();
           }
-        }, 300000),
+        }, 30000),
       [handleSave]
     );
     useEffect(() => {
+      if (!hasTrackedInitialDashboardState.current) {
+        hasTrackedInitialDashboardState.current = true;
+        return;
+      }
+      if (isSavingRef.current) return;
+      setHasUnsavedChanges(true);
+      setSaveStatusMessage(isAutoSaveEnabled ? "Unsaved changes - autosave pending" : "Unsaved changes");
       if (isAutoSaveEnabled) {
         debouncedSave();
       }
       return () => {
         debouncedSave.cancel();
       };
-    }, [widgets, layouts, isAutoSaveEnabled, debouncedSave]);
+    }, [widgets, layouts, dashboardTitle, dashboardBorderSettings, isAutoSaveEnabled, debouncedSave]);
+    useEffect(() => {
+      const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+        if (!hasUnsavedChanges) return;
+        event.preventDefault();
+        event.returnValue = "";
+      };
+      window.addEventListener("beforeunload", handleBeforeUnload);
+      return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [hasUnsavedChanges]);
     type RglLayoutChangeHandler = NonNullable<
       React.ComponentProps<typeof ResponsiveGridLayout>["onLayoutChange"]
     >;
@@ -412,7 +437,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
         );
         if (!isEqual(mutableAllLayouts, prevLayoutsRef.current)) {
           prevLayoutsRef.current = mutableAllLayouts;
-          console.log("Layouts updated locally (not saved).");
+          logger.debug("Layouts updated locally (not saved).");
         }
       },
       [layouts, setLayouts]
@@ -634,6 +659,10 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
                     loading={isSaving}
                   />
                 </Tooltip>
+                <div className="toolbar-save-status" aria-live="polite">
+                  {saveStatusMessage}
+                  {lastSavedAt ? ` ${lastSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}
+                </div>
                 <Tooltip title="Toggle Auto-Save" placement="left">
                   <Switch
                     checked={isAutoSaveEnabled}

@@ -24,7 +24,8 @@ import {
   FolderAddOutlined,
 } from '@ant-design/icons';
 import { v4 as uuidv4 } from 'uuid';
-import axios from 'axios';
+import { dashboardApi } from '../utils/apiClient';
+import { logger } from "../utils/logger";
 import { setWorkbookIdInProperties } from '../utils/excelUtils';
 import { DashboardItem } from './types';
 const { Content } = Layout;
@@ -88,21 +89,21 @@ const CreateDashboard: React.FC = () => {
         userEmail, // required by DashboardItem
       };
       try {
-        const response = await axios.post<DashboardItem>('/api/dashboards', newDashboard);
+        const response = await dashboardApi.create(newDashboard);
         const saved = response.data ?? newDashboard;
         setDashboards((prev) => [...prev, saved]);
         setCurrentDashboardId(saved.id);
         message.success('Dashboard created successfully!');
         navigate(`/dashboard/${saved.id}`);
       } catch (serverErr) {
-        console.error('Server save failed, adding locally:', serverErr);
+        logger.error('Server save failed, adding locally:', serverErr);
         setDashboards((prev) => [...prev, newDashboard]);
         setCurrentDashboardId(newDashboard.id);
         message.warning('Dashboard created locally (server save failed).');
         navigate(`/dashboard/${newDashboard.id}`);
       }
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       message.error('Failed to create dashboard. Please try again.');
     } finally {
       setLoading(false);

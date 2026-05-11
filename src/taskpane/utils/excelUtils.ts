@@ -1,7 +1,7 @@
 // src/utils/excelUtils.ts
-
 /// <reference types="office-js" />
-
+/* global Excel */
+import { logger } from "./logger";
 export const getWorkbookIdFromProperties = async (): Promise<string | null> => {
   try {
     return await Excel.run(async (context) => {
@@ -16,11 +16,10 @@ export const getWorkbookIdFromProperties = async (): Promise<string | null> => {
       return prop.value;
     });
   } catch (error) {
-    console.error('Error getting workbook ID from custom properties:', error);
+    logger.error("Error getting workbook ID from custom properties:", error);
     return null;
   }
 };
-
 export const setWorkbookIdInProperties = async (workbookId: string): Promise<void> => {
   try {
     await Excel.run(async (context) => {
@@ -35,6 +34,6 @@ export const setWorkbookIdInProperties = async (workbookId: string): Promise<voi
       await context.sync();
     });
   } catch (error) {
-    console.error('Error setting workbook ID in custom properties:', error);
+    logger.error("Error setting workbook ID in custom properties:", error);
   }
 };

@@ -1,6 +1,7 @@
 // src/taskpane/components/PromptWidgetDetailsModal.tsx
 import React from "react";
 import { Modal, Form, Input } from "antd";
+import { logger } from "../utils/logger";
 import { Widget } from "./types";
 interface PromptWidgetDetailsModalProps {
   widget: Widget;
@@ -24,7 +25,7 @@ const PromptWidgetDetailsModal: React.FC<PromptWidgetDetailsModalProps> = ({ wid
         form.resetFields();
       })
       .catch((info) => {
-        console.log("Validate Failed:", info);
+        logger.debug("Validate Failed:", info);
       });
   };
   return (

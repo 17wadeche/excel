@@ -1,5 +1,6 @@
 // src/taskpane/components/ErrorBoundary.tsx
 import React, { ErrorInfo, ReactNode } from "react";
+import { logger } from "../utils/logger";
 interface Props {
   children: ReactNode;
 }
@@ -15,7 +16,7 @@ class ErrorBoundary extends React.Component<Props, State> {
     return { hasError: true };
   }
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
+    logger.error("Uncaught error:", error, errorInfo);
   }
   render() {
     if (this.state.hasError) {

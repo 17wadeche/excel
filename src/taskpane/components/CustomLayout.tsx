@@ -50,8 +50,8 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
     saveDashboardVersion,
     isFetching,
   } = dashboardContext;
-  const isInDashboard = location.pathname.startsWith("/dashboard");
-  const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+  const dashboardActionPaths = ["/dashboard", "/edit-dashboard", "/dashboard-editor", "/full-screen"];
+  const isInDashboard = dashboardActionPaths.some((path) => location.pathname.startsWith(path));
   const showImportChartModal = () => {
     setIsImportChartModalVisible(true);
   };
@@ -125,7 +125,7 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
                 Import Charts from Excel
               </Menu.Item>
               <Menu.Item
-                key="test"
+                key="add-gantt-template"
                 icon={<ScheduleOutlined />}
                 onClick={generateProjectManagementTemplateAndGanttChart}
               >
@@ -140,7 +140,7 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
             </SubMenu>
           )}
           {isInDashboard && (
-            <SubMenu key="other-functions" icon={<AppstoreOutlined />} title="Other Functions">
+            <SubMenu key="other-functions" icon={<AppstoreOutlined />} title="Dashboard Actions">
               <Menu.Item key="export-pdf" icon={<DownloadOutlined />} onClick={exportDashboardAsPDF}>
                 Export as PDF
               </Menu.Item>
@@ -151,7 +151,7 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
                 Save as Template
               </Menu.Item>
               <Menu.Item key="save-version" icon={<SaveOutlined />} onClick={saveDashboardVersion}>
-                Save Version
+                Save Snapshot
               </Menu.Item>
               <Menu.Item
                 key="version-history"

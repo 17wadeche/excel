@@ -1,5 +1,5 @@
 // src/taskpane/components/widgets/SalesChart.tsx
-
+import { logger } from "../../utils/logger";
 import React, { useRef, useEffect } from "react";
 import Draggable from "react-draggable";
 import {
@@ -140,7 +140,7 @@ const SalesChart = ({ data, type }: SalesChartProps) => {
       }
     };
   }, []);
-  console.log("SalesChart Datasets:", data.datasets);
+  logger.debug("SalesChart Datasets:", data.datasets);
   const chartOptions: ChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -248,7 +248,7 @@ const SalesChart = ({ data, type }: SalesChartProps) => {
       const datasetIndex = elements[0].datasetIndex;
       const dataIndex = elements[0].index;
       const dataValue = chart.data.datasets[datasetIndex].data[dataIndex];
-      console.log(`Clicked on data point: ${dataValue}`);
+      logger.debug(`Clicked on data point: ${dataValue}`);
     }
   };
   const noAxisTypes = ["pie", "doughnut", "radar", "polarArea", "treemap", "funnel"];

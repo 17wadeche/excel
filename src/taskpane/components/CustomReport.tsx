@@ -2,6 +2,7 @@
 
 import React, { useContext, useEffect, useState } from 'react';
 import { Table, Button, Select, Input, Modal, Form, message } from 'antd';
+import { logger } from "../utils/logger";
 import {
   TablePaginationConfig,
   SorterResult,
@@ -77,7 +78,7 @@ const CustomReport: React.FC = () => {
         setLoading(false);
       });
     } catch (error) {
-      console.error('Error loading data from Excel:', error);
+      logger.error('Error loading data from Excel:', error);
       message.error('Failed to load data from Excel.');
       setLoading(false);
     }

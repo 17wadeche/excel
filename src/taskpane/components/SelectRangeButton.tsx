@@ -1,5 +1,6 @@
 // src/taskpane/components/SelectRangeButton.tsx
 import React, { useContext } from "react";
+import { logger } from "../utils/logger";
 import { Button, message } from "antd";
 import { DashboardContext } from "../context/DashboardContext";
 const SelectRangeButton: React.FC = () => {
@@ -18,7 +19,7 @@ const SelectRangeButton: React.FC = () => {
         message.success(`Selected range set to ${selectedRange.address}`);
       });
     } catch (error) {
-      console.error("Error selecting range:", error);
+      logger.error("Error selecting range:", error);
       message.error("Failed to select range.");
     }
   };

@@ -1,6 +1,7 @@
 // src/taskpane/components/ImportChartModal.tsx
 import React, { useState, useEffect, useContext } from "react";
 import { Modal, Select, message } from "antd";
+import { logger } from "../utils/logger";
 import { DashboardContext } from "../context/DashboardContext";
 const { Option } = Select;
 interface ImportChartModalProps {
@@ -35,7 +36,7 @@ const ImportChartModal: React.FC<ImportChartModalProps> = ({ visible, onCancel }
         }
       });
     } catch (error) {
-      console.error("Error fetching charts from Excel:", error);
+      logger.error("Error fetching charts from Excel:", error);
       message.error("Failed to fetch charts from Excel.");
       onCancel();
     }
@@ -59,7 +60,7 @@ const ImportChartModal: React.FC<ImportChartModalProps> = ({ visible, onCancel }
         onCancel();
       });
     } catch (error) {
-      console.error("Error importing chart image from Excel:", error);
+      logger.error("Error importing chart image from Excel:", error);
       message.error("Failed to import chart image from Excel.");
       onCancel();
     }
