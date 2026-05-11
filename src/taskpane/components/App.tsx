@@ -10,11 +10,12 @@ import '../utils/ChartConfig';
 import CustomReport from './CustomReport';
 import ReportView from './ReportView';
 import EditTemplate from './EditTemplate';
+import FirstRun from "./FirstRun";
 const App: React.FC = () => {
   return (
     <Routes>
       <Route path="/" element={<CustomLayout />}>
-        <Route index element={<CreateDashboard />} />
+        <Route index element={<FirstRun />} />
         <Route path="dashboard-editor" element={<DashboardPage />} />
         <Route path="custom-report" element={<CustomReport />} />
         <Route path="dashboard-list" element={<DashboardList />} />

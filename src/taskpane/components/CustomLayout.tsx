@@ -31,7 +31,9 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
   const [isImportChartModalVisible, setIsImportChartModalVisible] = useState(false);
   const [isFeedbackModalVisible, setIsFeedbackModalVisible] = useState(false);
   const [feedbackForm] = Form.useForm();
+  const [snapshotForm] = Form.useForm();
   const [isVersionHistoryVisible, setIsVersionHistoryVisible] = useState(false);
+  const [isSnapshotModalVisible, setIsSnapshotModalVisible] = useState(false);
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
@@ -50,7 +52,12 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
     saveDashboardVersion,
     isFetching,
   } = dashboardContext;
-  const dashboardActionPaths = ["/dashboard", "/edit-dashboard", "/dashboard-editor", "/full-screen"];
+  const dashboardActionPaths = [
+    "/dashboard",
+    "/edit-dashboard",
+    "/dashboard-editor",
+    "/full-screen",
+  ];
   const isInDashboard = dashboardActionPaths.some((path) => location.pathname.startsWith(path));
   const showImportChartModal = () => {
     setIsImportChartModalVisible(true);
@@ -63,6 +70,11 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
   };
   const handleFeedbackCancel = () => {
     setIsFeedbackModalVisible(false);
+  };
+  const handleSnapshotSubmit = (values: { name?: string; note?: string }) => {
+    saveDashboardVersion({ name: values.name, note: values.note });
+    setIsSnapshotModalVisible(false);
+    snapshotForm.resetFields();
   };
   const handleFeedbackSubmit = (values: any) => {
     const feedbackEmail = "excel.dashbooard.help@gmail.com";
@@ -80,7 +92,10 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
     setCollapsed(collapsed);
   };
   return (
-    <Layout className="custom-layout light-theme" style={{ minHeight: "100vh", width: "100%", height: "100%" }}>
+    <Layout
+      className="custom-layout light-theme"
+      style={{ minHeight: "100vh", width: "100%", height: "100%" }}
+    >
       <Sider
         collapsible
         width={250}
@@ -97,7 +112,9 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
           <Menu.Item key="/dashboard-list" icon={<UnorderedListOutlined />} disabled={isFetching}>
             {isFetching ? (
               <Tooltip title="Loading, please wait...">
-                <span style={{ cursor: "not-allowed", color: "rgba(0,0,0,0.25)" }}>Dashboard List</span>
+                <span style={{ cursor: "not-allowed", color: "rgba(0,0,0,0.25)" }}>
+                  Dashboard List
+                </span>
               </Tooltip>
             ) : (
               <Link to="/dashboard-list">Dashboard List</Link>
@@ -115,13 +132,25 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
               <Menu.Item key="add-line" icon={<LineOutlined />} onClick={() => addWidget("line")}>
                 Line
               </Menu.Item>
-              <Menu.Item key="add-text" icon={<FileTextOutlined />} onClick={() => addWidget("text")}>
+              <Menu.Item
+                key="add-text"
+                icon={<FileTextOutlined />}
+                onClick={() => addWidget("text")}
+              >
                 Text
               </Menu.Item>
-              <Menu.Item key="add-sales-chart" icon={<LineChartOutlined />} onClick={() => addWidget("chart")}>
+              <Menu.Item
+                key="add-sales-chart"
+                icon={<LineChartOutlined />}
+                onClick={() => addWidget("chart")}
+              >
                 Chart
               </Menu.Item>
-              <Menu.Item key="import-charts" icon={<UploadOutlined />} onClick={showImportChartModal}>
+              <Menu.Item
+                key="import-charts"
+                icon={<UploadOutlined />}
+                onClick={showImportChartModal}
+              >
                 Import Charts from Excel
               </Menu.Item>
               <Menu.Item
@@ -131,17 +160,29 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
               >
                 Add Gantt Template
               </Menu.Item>
-              <Menu.Item key="add-metric" icon={<DashboardOutlined />} onClick={() => addWidget("metric")}>
+              <Menu.Item
+                key="add-metric"
+                icon={<DashboardOutlined />}
+                onClick={() => addWidget("metric")}
+              >
                 Metric
               </Menu.Item>
-              <Menu.Item key="add-table" icon={<TableOutlined />} onClick={() => addWidget("table")}>
+              <Menu.Item
+                key="add-table"
+                icon={<TableOutlined />}
+                onClick={() => addWidget("table")}
+              >
                 Table
               </Menu.Item>
             </SubMenu>
           )}
           {isInDashboard && (
             <SubMenu key="other-functions" icon={<AppstoreOutlined />} title="Dashboard Actions">
-              <Menu.Item key="export-pdf" icon={<DownloadOutlined />} onClick={exportDashboardAsPDF}>
+              <Menu.Item
+                key="export-pdf"
+                icon={<DownloadOutlined />}
+                onClick={exportDashboardAsPDF}
+              >
                 Export as PDF
               </Menu.Item>
               <Menu.Item key="email-dashboard" icon={<MailOutlined />} onClick={emailDashboard}>
@@ -150,7 +191,11 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
               <Menu.Item key="save-template" icon={<SaveOutlined />} onClick={saveAsTemplate}>
                 Save as Template
               </Menu.Item>
-              <Menu.Item key="save-version" icon={<SaveOutlined />} onClick={saveDashboardVersion}>
+              <Menu.Item
+                key="save-version"
+                icon={<SaveOutlined />}
+                onClick={() => setIsSnapshotModalVisible(true)}
+              >
                 Save Snapshot
               </Menu.Item>
               <Menu.Item
@@ -173,14 +218,22 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
           transition: "margin-left 0.2s",
         }}
       >
-        <ImportChartModal visible={isImportChartModalVisible} onCancel={handleImportChartModalCancel} />
+        <ImportChartModal
+          visible={isImportChartModalVisible}
+          onCancel={handleImportChartModalCancel}
+        />
         <Content style={{ margin: "12px" }}>
           <div style={{ padding: 10, background: "var(--background-color)", minHeight: 360 }}>
             {children ? children : <Outlet />}
           </div>
         </Content>
         {isInDashboard && (
-          <Modal title="Submit Feedback" open={isFeedbackModalVisible} onCancel={handleFeedbackCancel} footer={null}>
+          <Modal
+            title="Submit Feedback"
+            open={isFeedbackModalVisible}
+            onCancel={handleFeedbackCancel}
+            footer={null}
+          >
             <Form form={feedbackForm} onFinish={handleFeedbackSubmit}>
               <Form.Item name="name" label="Name">
                 <Input placeholder="Your name (optional)" />
@@ -188,7 +241,11 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
               <Form.Item name="email" label="Email" rules={[{ type: "email" }]}>
                 <Input placeholder="Your email (optional)" />
               </Form.Item>
-              <Form.Item name="subject" label="Subject" rules={[{ required: true, message: "Please enter a subject" }]}>
+              <Form.Item
+                name="subject"
+                label="Subject"
+                rules={[{ required: true, message: "Please enter a subject" }]}
+              >
                 <Input placeholder="Subject" />
               </Form.Item>
               <Form.Item
@@ -207,9 +264,33 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
           </Modal>
         )}
         {isInDashboard && (
-          <VersionHistoryModal visible={isVersionHistoryVisible} onClose={() => setIsVersionHistoryVisible(false)} />
+          <Modal
+            title="Save dashboard snapshot"
+            open={isSnapshotModalVisible}
+            onCancel={() => setIsSnapshotModalVisible(false)}
+            onOk={() => snapshotForm.submit()}
+            okText="Save Snapshot"
+          >
+            <Form form={snapshotForm} layout="vertical" onFinish={handleSnapshotSubmit}>
+              <Form.Item name="name" label="Snapshot name">
+                <Input placeholder="e.g. Month-end executive version" />
+              </Form.Item>
+              <Form.Item name="note" label="Notes">
+                <Input.TextArea rows={3} placeholder="Optional context about what changed" />
+              </Form.Item>
+            </Form>
+          </Modal>
         )}
-        <DashboardSettingsModal visible={isSettingsModalVisible} onClose={() => setIsSettingsModalVisible(false)} />
+        {isInDashboard && (
+          <VersionHistoryModal
+            visible={isVersionHistoryVisible}
+            onClose={() => setIsVersionHistoryVisible(false)}
+          />
+        )}
+        <DashboardSettingsModal
+          visible={isSettingsModalVisible}
+          onClose={() => setIsSettingsModalVisible(false)}
+        />
       </Layout>
     </Layout>
   );

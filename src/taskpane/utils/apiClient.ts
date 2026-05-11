@@ -1,49 +1,131 @@
-/* global AbortController RequestInit URL fetch window */
+/* global AbortController RequestInit URL fetch window crypto */
 import { DashboardItem, TemplateItem } from "../components/types";
-const API_BASE_URL = "/api";
+type RuntimeConfig = typeof window & {
+  __API_BASE_URL__?: string;
+  __API_AUTH_TOKEN__?: string;
+};
+const runtimeWindow = window as RuntimeConfig;
+const API_BASE_URL = runtimeWindow.__API_BASE_URL__ ?? "/api";
 const DEFAULT_TIMEOUT_MS = 15000;
+const DEFAULT_RETRY_ATTEMPTS = 2;
 export interface ApiResponse<T> {
   data: T;
+  requestId: string;
+}
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status?: number,
+    public readonly statusText?: string,
+    public readonly responseBody?: string,
+    public readonly requestId?: string
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
 }
 type QueryValue = string | number | boolean | null | undefined;
 const buildUrl = (path: string, params?: Record<string, QueryValue>): string => {
-  const url = new URL(`${API_BASE_URL}${path}`, window.location.origin);
+  const normalizedBase = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const baseUrl = normalizedBase.startsWith("http")
+    ? normalizedBase
+    : `${window.location.origin}${normalizedBase}`;
+  const url = new URL(`${baseUrl}${normalizedPath}`);
   Object.entries(params ?? {}).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") {
       url.searchParams.set(key, String(value));
     }
   });
-  return `${url.pathname}${url.search}`;
+  return normalizedBase.startsWith("http") ? url.toString() : `${url.pathname}${url.search}`;
 };
+const createRequestId = () => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `req-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+const getAuthHeaders = (): Record<string, string> => {
+  if (!runtimeWindow.__API_AUTH_TOKEN__) {
+    return {};
+  }
+  return { Authorization: `Bearer ${runtimeWindow.__API_AUTH_TOKEN__}` };
+};
+const isRetryableStatus = (status: number) => status === 408 || status === 429 || status >= 500;
+const waitForRetry = (attempt: number) =>
+  new Promise((resolve) => window.setTimeout(resolve, 300 * 2 ** attempt));
 const request = async <T>(
   path: string,
   options: RequestInit = {},
-  params?: Record<string, QueryValue>
+  params?: Record<string, QueryValue>,
+  attempts = DEFAULT_RETRY_ATTEMPTS
 ): Promise<ApiResponse<T>> => {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
-  try {
-    const response = await fetch(buildUrl(path, params), {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      const body = await response.text();
-      throw new Error(
-        `API ${response.status} ${response.statusText}: ${body || "No response body"}`
+  const requestId = createRequestId();
+  const method = options.method ?? "GET";
+  const canRetry = method === "GET" || method === "DELETE";
+  for (let attempt = 0; attempt <= attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    try {
+      const response = await fetch(buildUrl(path, params), {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          "X-Request-Id": requestId,
+          ...getAuthHeaders(),
+          ...options.headers,
+        },
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        const body = await response.text();
+        const error = new ApiError(
+          `API ${response.status} ${response.statusText}: ${body || "No response body"}`,
+          response.status,
+          response.statusText,
+          body,
+          requestId
+        );
+        if (canRetry && attempt < attempts && isRetryableStatus(response.status)) {
+          await waitForRetry(attempt);
+          continue;
+        }
+        throw error;
+      }
+      if (response.status === 204) {
+        return { data: undefined as T, requestId };
+      }
+      return { data: (await response.json()) as T, requestId };
+    } catch (error) {
+      if (
+        canRetry &&
+        attempt < attempts &&
+        !(error instanceof ApiError && !isRetryableStatus(error.status ?? 0))
+      ) {
+        await waitForRetry(attempt);
+        continue;
+      }
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError(
+        `API ${method} ${path} failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+        undefined,
+        undefined,
+        undefined,
+        requestId
       );
+    } finally {
+      window.clearTimeout(timeout);
     }
-    if (response.status === 204) {
-      return { data: undefined as T };
-    }
-    return { data: (await response.json()) as T };
-  } finally {
-    window.clearTimeout(timeout);
   }
+  throw new ApiError(
+    `API ${method} ${path} failed after retries`,
+    undefined,
+    undefined,
+    undefined,
+    requestId
+  );
 };
 export const apiClient = {
   get: <T>(path: string, params?: Record<string, QueryValue>) =>

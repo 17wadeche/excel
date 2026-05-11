@@ -277,6 +277,8 @@ export interface DashboardVersion {
   id: string;
   timestamp: string;
   title: string;
+  name?: string;
+  note?: string;
   components: Widget[];
   layouts: { [key: string]: GridLayoutItem[] };
   borderSettings?: DashboardBorderSettings;

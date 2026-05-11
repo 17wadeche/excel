@@ -1,5 +1,5 @@
 // src/taskpane/components/CreateDashboard.tsx
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext } from "react";
 import {
   Layout,
   Form,
@@ -15,18 +15,14 @@ import {
   Spin,
   Divider,
   Empty,
-} from 'antd';
-import { useNavigate } from 'react-router-dom';
-import { DashboardContext } from '../context/DashboardContext';
-import {
-  DeleteOutlined,
-  PlusOutlined,
-  FolderAddOutlined,
-} from '@ant-design/icons';
-import { v4 as uuidv4 } from 'uuid';
+} from "antd";
+import { useNavigate } from "react-router-dom";
+import { DashboardContext } from "../context/DashboardContext";
+import { DeleteOutlined, PlusOutlined, FolderAddOutlined } from "@ant-design/icons";
+import { v4 as uuidv4 } from "uuid";
 import { logger } from "../utils/logger";
-import { setWorkbookIdInProperties } from '../utils/excelUtils';
-import { DashboardItem, GridLayoutItem, Widget } from './types';
+import { setWorkbookIdInProperties } from "../utils/excelUtils";
+import { DashboardItem, GridLayoutItem, Widget } from "./types";
 const { Content } = Layout;
 const { Search } = Input;
 interface Template {
@@ -38,8 +34,8 @@ interface Template {
   layouts?: { [key: string]: GridLayoutItem[] };
 }
 const CreateDashboard: React.FC = () => {
-  const [dashboardTitle, setDashboardTitle] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [dashboardTitle, setDashboardTitle] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [templates, setTemplates] = useState<Template[]>([]);
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -58,7 +54,7 @@ const CreateDashboard: React.FC = () => {
   useEffect(() => {
     setLoading(true);
     const storedTemplates = JSON.parse(
-      localStorage.getItem('dashboardTemplates') || '[]'
+      localStorage.getItem("dashboardTemplates") || "[]"
     ) as Template[];
     setTimeout(() => {
       setTemplates(storedTemplates);
@@ -67,14 +63,16 @@ const CreateDashboard: React.FC = () => {
   }, []);
   const handleCreate = async () => {
     if (!dashboardTitle.trim()) {
-      message.error('Dashboard title cannot be empty.');
+      message.error("Dashboard title cannot be empty.");
       return;
     }
     setLoading(true);
     try {
-      const workbookId = uuidv4(); // Generate a new workbookId
-      await setWorkbookIdInProperties(workbookId);
-      setCurrentWorkbookId(workbookId); // Update context
+      const workbookId = currentWorkbookId || uuidv4();
+      if (!currentWorkbookId) {
+        await setWorkbookIdInProperties(workbookId);
+        setCurrentWorkbookId(workbookId);
+      }
       const newDashboard: DashboardItem = {
         id: uuidv4(),
         title: dashboardTitle,
@@ -85,51 +83,54 @@ const CreateDashboard: React.FC = () => {
       };
       const saved = await addDashboard(newDashboard);
       setCurrentDashboardId(saved.id);
-      message.success('Dashboard created successfully!');
+      message.success("Dashboard created successfully!");
       navigate(`/dashboard/${saved.id}`);
     } catch (error) {
       logger.error(error);
-      message.error('Failed to create dashboard. Please try again.');
+      message.error("Failed to create dashboard. Please try again.");
     } finally {
       setLoading(false);
     }
   };
   const createDashboardFromTemplate = async (template: Template) => {
-    if (!currentWorkbookId) {
-      message.error('No workbook ID found. Cannot create dashboard from template.');
-      return;
-    }
-    const newDashboard: DashboardItem = {
-      id: uuidv4(),
-      title: template.name || 'Untitled Dashboard',
-      components: template.widgets || [],
-      layouts: template.layouts || {},
-      workbookId: currentWorkbookId,
-      userEmail,
-    };
-
     try {
+      let workbookId = currentWorkbookId;
+      if (!workbookId) {
+        workbookId = uuidv4();
+        await setWorkbookIdInProperties(workbookId);
+        setCurrentWorkbookId(workbookId);
+      }
+
+      const newDashboard: DashboardItem = {
+        id: uuidv4(),
+        title: template.name || "Untitled Dashboard",
+        components: template.widgets || [],
+        layouts: template.layouts || {},
+        workbookId,
+        userEmail,
+      };
+
       const saved = await addDashboard(newDashboard);
       setCurrentDashboardId(saved.id);
       navigate(`/dashboard/${saved.id}`);
       message.success(`Dashboard "${saved.title}" created from template!`);
     } catch (error) {
-      logger.error('Failed to create dashboard from template:', error);
-      message.error('Failed to create dashboard from template.');
+      logger.error("Failed to create dashboard from template:", error);
+      message.error("Failed to create dashboard from template.");
     }
   };
   const editTemplate = (template: Template) => {
-    setContextTitle(template.name || 'Untitled Template');
+    setContextTitle(template.name || "Untitled Template");
     setWidgets(template.widgets || []);
     setCurrentTemplateId(template.id);
-    navigate('/dashboard-editor');
+    navigate("/dashboard-editor");
   };
   const confirmDeleteTemplate = (id: string) => {
     Modal.confirm({
-      title: 'Are you sure you want to delete this template?',
-      okText: 'Yes',
-      okType: 'danger',
-      cancelText: 'No',
+      title: "Are you sure you want to delete this template?",
+      okText: "Yes",
+      okType: "danger",
+      cancelText: "No",
       onOk: () => deleteTemplate(id),
       maskClosable: true,
     });
@@ -137,23 +138,23 @@ const CreateDashboard: React.FC = () => {
   const deleteTemplate = (id: string) => {
     const updatedTemplates = templates.filter((template) => template.id !== id);
     setTemplates(updatedTemplates);
-    localStorage.setItem('dashboardTemplates', JSON.stringify(updatedTemplates));
-    message.success('Template deleted successfully!');
+    localStorage.setItem("dashboardTemplates", JSON.stringify(updatedTemplates));
+    message.success("Template deleted successfully!");
   };
   const filteredTemplates = templates.filter((template) =>
     template.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
   return (
-    <Layout style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
+    <Layout style={{ padding: "24px", background: "#f0f2f5", minHeight: "100vh" }}>
       <Content>
         <Row justify="center" gutter={[100, 24]}>
           <Col xs={24} sm={20} md={16} lg={12}>
             <Card
               bordered={false}
               style={{
-                borderRadius: '12px',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                background: '#fff',
+                borderRadius: "12px",
+                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                background: "#fff",
               }}
             >
               <Form layout="vertical" onFinish={handleCreate}>
@@ -163,7 +164,7 @@ const CreateDashboard: React.FC = () => {
                   rules={[
                     {
                       required: true,
-                      message: 'Please input the dashboard title!',
+                      message: "Please input the dashboard title!",
                     },
                   ]}
                 >
@@ -186,18 +187,18 @@ const CreateDashboard: React.FC = () => {
                     size="large"
                     icon={<FolderAddOutlined />}
                     style={{
-                      borderRadius: '8px',
-                      height: '50px',
-                      fontSize: '16px',
-                      backgroundColor: '#1890ff',
-                      borderColor: '#1890ff',
-                      transition: 'background-color 0.3s ease',
+                      borderRadius: "8px",
+                      height: "50px",
+                      fontSize: "16px",
+                      backgroundColor: "#1890ff",
+                      borderColor: "#1890ff",
+                      transition: "background-color 0.3s ease",
                     }}
                     onMouseEnter={(e) => {
-                      (e.target as HTMLButtonElement).style.backgroundColor = '#40a9ff';
+                      (e.target as HTMLButtonElement).style.backgroundColor = "#40a9ff";
                     }}
                     onMouseLeave={(e) => {
-                      (e.target as HTMLButtonElement).style.backgroundColor = '#1890ff';
+                      (e.target as HTMLButtonElement).style.backgroundColor = "#1890ff";
                     }}
                   >
                     Create Dashboard
@@ -210,9 +211,11 @@ const CreateDashboard: React.FC = () => {
         <Divider />
         <Row justify="center" gutter={[16, 24]}>
           <Col xs={24} sm={20} md={16} lg={12}>
-            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-              <h2 style={{ fontWeight: 600, color: '#001529' }}>Choose a Template</h2>
-              <p style={{ color: '#595959' }}>Select a template to quickly create a new dashboard.</p>
+            <div style={{ textAlign: "center", marginBottom: "20px" }}>
+              <h2 style={{ fontWeight: 600, color: "#001529" }}>Choose a Template</h2>
+              <p style={{ color: "#595959" }}>
+                Select a template to quickly create a new dashboard.
+              </p>
             </div>
             <Search
               placeholder="Search Templates"
@@ -221,10 +224,10 @@ const CreateDashboard: React.FC = () => {
               enterButton
               allowClear
               size="large"
-              style={{ marginBottom: '20px' }}
+              style={{ marginBottom: "20px" }}
             />
             {loading ? (
-              <div style={{ textAlign: 'center', padding: '50px 0' }}>
+              <div style={{ textAlign: "center", padding: "50px 0" }}>
                 <Spin tip="Loading templates..." size="large" />
               </div>
             ) : filteredTemplates.length > 0 ? (
@@ -266,23 +269,25 @@ const CreateDashboard: React.FC = () => {
                         </Tooltip>,
                       ]}
                       style={{
-                        borderRadius: '12px',
-                        overflow: 'hidden',
-                        transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+                        borderRadius: "12px",
+                        overflow: "hidden",
+                        transition: "transform 0.3s ease, box-shadow 0.3s ease",
                       }}
                       onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLElement).style.transform = 'scale(1.03)';
+                        (e.currentTarget as HTMLElement).style.transform = "scale(1.03)";
                         (e.currentTarget as HTMLElement).style.boxShadow =
-                          '0 8px 16px rgba(0, 0, 0, 0.2)';
+                          "0 8px 16px rgba(0, 0, 0, 0.2)";
                       }}
                       onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
+                        (e.currentTarget as HTMLElement).style.transform = "scale(1)";
                         (e.currentTarget as HTMLElement).style.boxShadow =
-                          '0 4px 12px rgba(0, 0, 0, 0.1)';
+                          "0 4px 12px rgba(0, 0, 0, 0.1)";
                       }}
                     >
                       <Card.Meta
-                        title={<span style={{ fontSize: '18px', fontWeight: 500 }}>{template.name}</span>}
+                        title={
+                          <span style={{ fontSize: "18px", fontWeight: 500 }}>{template.name}</span>
+                        }
                       />
                     </Card>
                   </List.Item>
@@ -301,7 +306,7 @@ const CreateDashboard: React.FC = () => {
             onCancel={() => setPreviewTemplate(null)}
             width={800}
             centered
-            bodyStyle={{ maxHeight: '70vh', overflowY: 'auto' }}
+            bodyStyle={{ maxHeight: "70vh", overflowY: "auto" }}
             destroyOnClose
           >
             <p>Preview functionality has been removed.</p>

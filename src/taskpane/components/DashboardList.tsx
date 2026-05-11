@@ -1,5 +1,5 @@
 // src/taskpane/components/DashboardList.tsx
-import React, { useContext, useMemo, useState } from 'react';
+import React, { useContext, useMemo, useState } from "react";
 import {
   Layout,
   List,
@@ -13,34 +13,40 @@ import {
   Input,
   Divider,
   Empty,
-} from 'antd';
+  Alert,
+  Spin,
+} from "antd";
 import {
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
   SearchOutlined,
   EyeOutlined,
-} from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
-import { DashboardContext } from '../context/DashboardContext';
-import './DashboardList.css';
+} from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
+import { DashboardContext } from "../context/DashboardContext";
+import "./DashboardList.css";
 const { Content } = Layout;
 const { Title } = Typography;
 const { Search } = Input;
 const DashboardList: React.FC = () => {
-  const { dashboards, deleteDashboard } = useContext(DashboardContext)!;
+  const { dashboards, deleteDashboard, currentWorkbookId, userEmail, isFetching } =
+    useContext(DashboardContext)!;
   const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const filteredDashboards = useMemo(
-    () => dashboards.filter((dashboard) => dashboard.title.toLowerCase().includes(searchTerm.toLowerCase())),
+    () =>
+      dashboards.filter((dashboard) =>
+        dashboard.title.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
     [dashboards, searchTerm]
   );
   const handleDelete = (id: string) => {
     Modal.confirm({
-      title: 'Are you sure you want to delete this dashboard?',
-      okText: 'Yes',
-      okType: 'danger',
-      cancelText: 'No',
+      title: "Are you sure you want to delete this dashboard?",
+      okText: "Yes",
+      okType: "danger",
+      cancelText: "No",
       onOk: async () => {
         await deleteDashboard(id);
       },
@@ -54,12 +60,12 @@ const DashboardList: React.FC = () => {
     navigate(`/edit-dashboard/${id}`);
   };
   const handleCreateNew = () => {
-    navigate('/create');
+    navigate("/create");
   };
   return (
-    <Layout style={{ padding: '24px', background: '#f0f2f5', minHeight: '100vh' }}>
+    <Layout style={{ padding: "24px", background: "#f0f2f5", minHeight: "100vh" }}>
       <Content>
-        <Row justify="space-between" align="middle" style={{ marginBottom: '24px' }}>
+        <Row justify="space-between" align="middle" style={{ marginBottom: "24px" }}>
           <Col>
             <Title level={2} style={{ margin: 0 }}>
               My Dashboards
@@ -71,13 +77,13 @@ const DashboardList: React.FC = () => {
               icon={<PlusOutlined />}
               onClick={handleCreateNew}
               size="large"
-              style={{ borderRadius: '8px', height: '50px' }}
+              style={{ borderRadius: "8px", height: "50px" }}
             >
               Create New Dashboard
             </Button>
           </Col>
         </Row>
-        <Row justify="center" style={{ marginBottom: '24px' }}>
+        <Row justify="center" style={{ marginBottom: "24px" }}>
           <Col xs={24} sm={16} md={12} lg={8}>
             <Search
               placeholder="Search Dashboards"
@@ -90,8 +96,38 @@ const DashboardList: React.FC = () => {
           </Col>
         </Row>
         <Divider />
-        {filteredDashboards.length === 0 ? (
-          <Empty description="No Dashboards Found" />
+        {!currentWorkbookId && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: "16px" }}
+            message="Workbook identity is not available"
+            description="Create a new dashboard to initialize this workbook, or reopen the task pane after the workbook finishes loading."
+          />
+        )}
+        {!userEmail && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: "16px" }}
+            message="User identity is not configured"
+            description="Dashboards may still work locally, but shared production use should connect the add-in to your sign-in flow."
+          />
+        )}
+        {isFetching ? (
+          <Spin tip="Loading dashboards..." />
+        ) : filteredDashboards.length === 0 ? (
+          <Empty
+            description={
+              searchTerm
+                ? "No dashboards match your search"
+                : "No dashboards found for this workbook"
+            }
+          >
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateNew}>
+              Create Your First Dashboard
+            </Button>
+          </Empty>
         ) : (
           <List
             grid={{
@@ -145,7 +181,7 @@ const DashboardList: React.FC = () => {
                   tabIndex={0}
                   onClick={() => handleView(dashboard.id)}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
+                    if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
                       handleView(dashboard.id);
                     }
@@ -153,12 +189,12 @@ const DashboardList: React.FC = () => {
                 >
                   <Card.Meta
                     title={
-                      <span style={{ fontSize: '18px', fontWeight: '500', color: '#001529' }}>
-                        {dashboard.title || 'Untitled Dashboard'}
+                      <span style={{ fontSize: "18px", fontWeight: "500", color: "#001529" }}>
+                        {dashboard.title || "Untitled Dashboard"}
                       </span>
                     }
                     description={
-                      <span style={{ color: '#595959' }}>
+                      <span style={{ color: "#595959" }}>
                         Components: {dashboard.components.length}
                       </span>
                     }
