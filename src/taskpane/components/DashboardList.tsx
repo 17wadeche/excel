@@ -101,7 +101,7 @@ const DashboardList: React.FC = () => {
             type="warning"
             showIcon
             style={{ marginBottom: "16px" }}
-            message="Workbook identity is not available"
+            title="Workbook identity is not available"
             description="Create a new dashboard to initialize this workbook, or reopen the task pane after the workbook finishes loading."
           />
         )}
@@ -110,12 +110,12 @@ const DashboardList: React.FC = () => {
             type="info"
             showIcon
             style={{ marginBottom: "16px" }}
-            message="User identity is not configured"
+            title="User identity is not configured"
             description="Dashboards may still work locally, but shared production use should connect the add-in to your sign-in flow."
           />
         )}
         {isFetching ? (
-          <Spin tip="Loading dashboards..." />
+          <Spin description="Loading dashboards..." />
         ) : filteredDashboards.length === 0 ? (
           <Empty
             description={

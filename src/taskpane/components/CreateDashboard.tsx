@@ -150,7 +150,7 @@ const CreateDashboard: React.FC = () => {
         <Row justify="center" gutter={[100, 24]}>
           <Col xs={24} sm={20} md={16} lg={12}>
             <Card
-              bordered={false}
+              variant="borderless"
               style={{
                 borderRadius: "12px",
                 boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
@@ -228,7 +228,7 @@ const CreateDashboard: React.FC = () => {
             />
             {loading ? (
               <div style={{ textAlign: "center", padding: "50px 0" }}>
-                <Spin tip="Loading templates..." size="large" />
+                <Spin description="Loading templates..." size="large" />
               </div>
             ) : filteredTemplates.length > 0 ? (
               <List

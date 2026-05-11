@@ -1,12 +1,21 @@
-/* global AbortController RequestInit URL fetch window crypto */
+/* global AbortController RequestInit URL fetch window crypto localStorage */
 import { DashboardItem, TemplateItem } from "../components/types";
 type RuntimeConfig = typeof window & {
   __API_BASE_URL__?: string;
   __API_AUTH_TOKEN__?: string;
+  __USE_LOCAL_API_FALLBACK__?: boolean;
 };
 type AuthTokenProvider = () => Promise<string | null> | string | null;
 const runtimeWindow = window as RuntimeConfig;
 const getApiBaseUrl = () => runtimeWindow.__API_BASE_URL__ ?? "/api";
+export const isUsingLocalApiFallback = () => {
+  if (typeof runtimeWindow.__USE_LOCAL_API_FALLBACK__ === "boolean") {
+    return runtimeWindow.__USE_LOCAL_API_FALLBACK__;
+  }
+  return (
+    ["localhost", "127.0.0.1"].includes(window.location.hostname) && getApiBaseUrl() === "/api"
+  );
+};
 const DEFAULT_TIMEOUT_MS = 15000;
 const DEFAULT_RETRY_ATTEMPTS = 2;
 let authTokenProvider: AuthTokenProvider | null = null;
@@ -153,19 +162,134 @@ export const apiClient = {
     }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
+const LOCAL_DASHBOARDS_KEY = "workbookDashboard.local.dashboards";
+const LOCAL_TEMPLATES_KEY = "workbookDashboard.local.templates";
+const readLocalCollection = <T>(key: string): T[] => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T[]) : [];
+  } catch {
+    return [];
+  }
+};
+const writeLocalCollection = <T>(key: string, items: T[]) => {
+  localStorage.setItem(key, JSON.stringify(items));
+};
+const localResponse = <T>(data: T): ApiResponse<T> => ({ data, requestId: "local-development" });
+const nowIso = () => new Date().toISOString();
+const localDashboardApi = {
+  list: (params?: { workbookId?: string; userEmail?: string }) => {
+    const dashboards = readLocalCollection<DashboardItem>(LOCAL_DASHBOARDS_KEY).filter(
+      (dashboard) => {
+        const workbookMatches = !params?.workbookId || dashboard.workbookId === params.workbookId;
+        const userMatches =
+          !params?.userEmail || !dashboard.userEmail || dashboard.userEmail === params.userEmail;
+        return workbookMatches && userMatches;
+      }
+    );
+    return Promise.resolve(localResponse(dashboards));
+  },
+  get: (id: string) => {
+    const dashboard = readLocalCollection<DashboardItem>(LOCAL_DASHBOARDS_KEY).find(
+      (item) => item.id === id
+    );
+    if (!dashboard) {
+      return Promise.reject(
+        new ApiError(
+          `Local dashboard ${id} not found`,
+          404,
+          "Not Found",
+          undefined,
+          "local-development"
+        )
+      );
+    }
+    return Promise.resolve(localResponse(dashboard));
+  },
+  create: (dashboard: DashboardItem) => {
+    const dashboards = readLocalCollection<DashboardItem>(LOCAL_DASHBOARDS_KEY);
+    const saved = {
+      ...dashboard,
+      id: dashboard.id || `dashboard-${Date.now()}`,
+      updatedAt: nowIso(),
+    } as DashboardItem;
+    writeLocalCollection(LOCAL_DASHBOARDS_KEY, [
+      ...dashboards.filter((item) => item.id !== saved.id),
+      saved,
+    ]);
+    return Promise.resolve(localResponse(saved));
+  },
+  update: (id: string, dashboard: DashboardItem) => {
+    const dashboards = readLocalCollection<DashboardItem>(LOCAL_DASHBOARDS_KEY);
+    const saved = { ...dashboard, id, updatedAt: nowIso() } as DashboardItem;
+    writeLocalCollection(LOCAL_DASHBOARDS_KEY, [
+      ...dashboards.filter((item) => item.id !== id),
+      saved,
+    ]);
+    return Promise.resolve(localResponse(saved));
+  },
+  delete: (id: string) => {
+    const dashboards = readLocalCollection<DashboardItem>(LOCAL_DASHBOARDS_KEY);
+    writeLocalCollection(
+      LOCAL_DASHBOARDS_KEY,
+      dashboards.filter((item) => item.id !== id)
+    );
+    return Promise.resolve(localResponse(undefined as void));
+  },
+};
+const localTemplateApi = {
+  create: (template: Record<string, unknown>) => {
+    const templates = readLocalCollection<TemplateItem>(LOCAL_TEMPLATES_KEY);
+    const saved = {
+      ...template,
+      id: String(template.id || `template-${Date.now()}`),
+    } as unknown as TemplateItem;
+    writeLocalCollection(LOCAL_TEMPLATES_KEY, [
+      ...templates.filter((item) => item.id !== saved.id),
+      saved,
+    ]);
+    return Promise.resolve(localResponse(saved));
+  },
+  update: (id: string, template: Record<string, unknown>) => {
+    const templates = readLocalCollection<TemplateItem>(LOCAL_TEMPLATES_KEY);
+    const saved = { ...template, id } as unknown as TemplateItem;
+    writeLocalCollection(LOCAL_TEMPLATES_KEY, [
+      ...templates.filter((item) => item.id !== id),
+      saved,
+    ]);
+    return Promise.resolve(localResponse(saved));
+  },
+};
 export const dashboardApi = {
   list: (params?: { workbookId?: string; userEmail?: string }) =>
-    apiClient.get<DashboardItem[]>("/dashboards", params),
-  get: (id: string) => apiClient.get<DashboardItem>(`/dashboards/${id}`),
-  create: (dashboard: DashboardItem) => apiClient.post<DashboardItem>("/dashboards", dashboard),
+    isUsingLocalApiFallback()
+      ? localDashboardApi.list(params)
+      : apiClient.get<DashboardItem[]>("/dashboards", params),
+  get: (id: string) =>
+    isUsingLocalApiFallback()
+      ? localDashboardApi.get(id)
+      : apiClient.get<DashboardItem>(`/dashboards/${id}`),
+  create: (dashboard: DashboardItem) =>
+    isUsingLocalApiFallback()
+      ? localDashboardApi.create(dashboard)
+      : apiClient.post<DashboardItem>("/dashboards", dashboard),
   update: (id: string, dashboard: DashboardItem) =>
-    apiClient.put<DashboardItem>(`/dashboards/${id}`, dashboard),
-  delete: (id: string) => apiClient.delete<void>(`/dashboards/${id}`),
+    isUsingLocalApiFallback()
+      ? localDashboardApi.update(id, dashboard)
+      : apiClient.put<DashboardItem>(`/dashboards/${id}`, dashboard),
+  delete: (id: string) =>
+    isUsingLocalApiFallback()
+      ? localDashboardApi.delete(id)
+      : apiClient.delete<void>(`/dashboards/${id}`),
 };
 export const templateApi = {
   create: (template: Record<string, unknown>) =>
-    apiClient.post<TemplateItem>("/templates", template),
+    isUsingLocalApiFallback()
+      ? localTemplateApi.create(template)
+      : apiClient.post<TemplateItem>("/templates", template),
   update: (id: string, template: Record<string, unknown>) =>
-    apiClient.put<TemplateItem>(`/templates/${id}`, template),
+    isUsingLocalApiFallback()
+      ? localTemplateApi.update(id, template)
+      : apiClient.put<TemplateItem>(`/templates/${id}`, template),
 };
 export default apiClient;

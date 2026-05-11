@@ -634,7 +634,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
             ) : (
               <Card
                 className="widget-card"
-                bordered={false}
+                variant="borderless"
                 style={{
                   width: "100%",
                   height: "100%",
@@ -789,7 +789,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
           </ResponsiveGridLayout>
           {isSaving && (
             <div className="saving-overlay">
-              <Spin tip="Saving..." size="large" />
+              <Spin description="Saving..." size="large" />
             </div>
           )}
           {isPresentationMode && <PresentationDashboard />}

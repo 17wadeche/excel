@@ -1,6 +1,6 @@
 // src/taskpane/components/CustomLayout.tsx
 import React, { useContext, useState } from "react";
-import { Layout, Menu, Button, Modal, Form, Input, message, Tooltip } from "antd";
+import { Layout, Menu, Button, Modal, Form, Input, message, Tooltip, MenuProps } from "antd";
 import { Link, useLocation, useNavigate, Outlet } from "react-router-dom";
 import {
   PlusOutlined,
@@ -26,7 +26,6 @@ import VersionHistoryModal from "./VersionHistoryModal";
 import DashboardSettingsModal from "./DashboardSettingsModal";
 import "./CustomLayout.css";
 const { Content, Sider } = Layout;
-const { SubMenu } = Menu;
 const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
   const [isImportChartModalVisible, setIsImportChartModalVisible] = useState(false);
   const [isFeedbackModalVisible, setIsFeedbackModalVisible] = useState(false);
@@ -91,6 +90,104 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
   const onCollapse = (collapsed: boolean) => {
     setCollapsed(collapsed);
   };
+  const menuItems: MenuProps["items"] = [
+    {
+      key: "/create",
+      icon: <PlusOutlined />,
+      label: <Link to="/create">Create Dashboard</Link>,
+    },
+    {
+      key: "/dashboard-list",
+      icon: <UnorderedListOutlined />,
+      disabled: isFetching,
+      label: isFetching ? (
+        <Tooltip title="Loading, please wait...">
+          <span style={{ cursor: "not-allowed", color: "rgba(0,0,0,0.25)" }}>
+            Dashboard List
+          </span>
+        </Tooltip>
+      ) : (
+        <Link to="/dashboard-list">Dashboard List</Link>
+      ),
+    },
+    ...(isInDashboard
+      ? [
+          {
+            key: "add-visuals",
+            icon: <PictureOutlined />,
+            label: "Add Visuals",
+            children: [
+              {
+                key: "dashboard-settings",
+                icon: <BorderOutlined />,
+                label: "Dashboard Settings",
+                onClick: () => setIsSettingsModalVisible(true),
+              },
+              { key: "add-line", icon: <LineOutlined />, label: "Line", onClick: () => addWidget("line") },
+              { key: "add-text", icon: <FileTextOutlined />, label: "Text", onClick: () => addWidget("text") },
+              {
+                key: "add-sales-chart",
+                icon: <LineChartOutlined />,
+                label: "Chart",
+                onClick: () => addWidget("chart"),
+              },
+              {
+                key: "import-charts",
+                icon: <UploadOutlined />,
+                label: "Import Charts from Excel",
+                onClick: showImportChartModal,
+              },
+              {
+                key: "add-gantt-template",
+                icon: <ScheduleOutlined />,
+                label: "Add Gantt Template",
+                onClick: generateProjectManagementTemplateAndGanttChart,
+              },
+              {
+                key: "add-metric",
+                icon: <DashboardOutlined />,
+                label: "Metric",
+                onClick: () => addWidget("metric"),
+              },
+              {
+                key: "add-table",
+                icon: <TableOutlined />,
+                label: "Table",
+                onClick: () => addWidget("table"),
+              },
+            ],
+          },
+          {
+            key: "other-functions",
+            icon: <AppstoreOutlined />,
+            label: "Dashboard Actions",
+            children: [
+              {
+                key: "export-pdf",
+                icon: <DownloadOutlined />,
+                label: "Export as PDF",
+                onClick: exportDashboardAsPDF,
+              },
+              { key: "email-dashboard", icon: <MailOutlined />, label: "Email Dashboard", onClick: emailDashboard },
+              { key: "save-template", icon: <SaveOutlined />, label: "Save as Template", onClick: saveAsTemplate },
+              {
+                key: "save-version",
+                icon: <SaveOutlined />,
+                label: "Save Snapshot",
+                onClick: () => setIsSnapshotModalVisible(true),
+              },
+              {
+                key: "version-history",
+                icon: <HistoryOutlined />,
+                label: "Version History",
+                onClick: () => setIsVersionHistoryVisible(true),
+              },
+              { key: "feedback", icon: <MailOutlined />, label: "Feedback", onClick: showFeedbackModal },
+            ],
+          },
+        ]
+      : []),
+  ];
   return (
     <Layout
       className="custom-layout light-theme"
@@ -105,112 +202,7 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
         onCollapse={onCollapse}
       >
         {!collapsed && <div className="logo">Dashboard</div>}
-        <Menu mode="inline" selectedKeys={[location.pathname]}>
-          <Menu.Item key="/create" icon={<PlusOutlined />}>
-            <Link to="/create">Create Dashboard</Link>
-          </Menu.Item>
-          <Menu.Item key="/dashboard-list" icon={<UnorderedListOutlined />} disabled={isFetching}>
-            {isFetching ? (
-              <Tooltip title="Loading, please wait...">
-                <span style={{ cursor: "not-allowed", color: "rgba(0,0,0,0.25)" }}>
-                  Dashboard List
-                </span>
-              </Tooltip>
-            ) : (
-              <Link to="/dashboard-list">Dashboard List</Link>
-            )}
-          </Menu.Item>
-          {isInDashboard && (
-            <SubMenu key="add-visuals" icon={<PictureOutlined />} title="Add Visuals">
-              <Menu.Item
-                key="dashboard-settings"
-                icon={<BorderOutlined />}
-                onClick={() => setIsSettingsModalVisible(true)}
-              >
-                Dashboard Settings
-              </Menu.Item>
-              <Menu.Item key="add-line" icon={<LineOutlined />} onClick={() => addWidget("line")}>
-                Line
-              </Menu.Item>
-              <Menu.Item
-                key="add-text"
-                icon={<FileTextOutlined />}
-                onClick={() => addWidget("text")}
-              >
-                Text
-              </Menu.Item>
-              <Menu.Item
-                key="add-sales-chart"
-                icon={<LineChartOutlined />}
-                onClick={() => addWidget("chart")}
-              >
-                Chart
-              </Menu.Item>
-              <Menu.Item
-                key="import-charts"
-                icon={<UploadOutlined />}
-                onClick={showImportChartModal}
-              >
-                Import Charts from Excel
-              </Menu.Item>
-              <Menu.Item
-                key="add-gantt-template"
-                icon={<ScheduleOutlined />}
-                onClick={generateProjectManagementTemplateAndGanttChart}
-              >
-                Add Gantt Template
-              </Menu.Item>
-              <Menu.Item
-                key="add-metric"
-                icon={<DashboardOutlined />}
-                onClick={() => addWidget("metric")}
-              >
-                Metric
-              </Menu.Item>
-              <Menu.Item
-                key="add-table"
-                icon={<TableOutlined />}
-                onClick={() => addWidget("table")}
-              >
-                Table
-              </Menu.Item>
-            </SubMenu>
-          )}
-          {isInDashboard && (
-            <SubMenu key="other-functions" icon={<AppstoreOutlined />} title="Dashboard Actions">
-              <Menu.Item
-                key="export-pdf"
-                icon={<DownloadOutlined />}
-                onClick={exportDashboardAsPDF}
-              >
-                Export as PDF
-              </Menu.Item>
-              <Menu.Item key="email-dashboard" icon={<MailOutlined />} onClick={emailDashboard}>
-                Email Dashboard
-              </Menu.Item>
-              <Menu.Item key="save-template" icon={<SaveOutlined />} onClick={saveAsTemplate}>
-                Save as Template
-              </Menu.Item>
-              <Menu.Item
-                key="save-version"
-                icon={<SaveOutlined />}
-                onClick={() => setIsSnapshotModalVisible(true)}
-              >
-                Save Snapshot
-              </Menu.Item>
-              <Menu.Item
-                key="version-history"
-                icon={<HistoryOutlined />}
-                onClick={() => setIsVersionHistoryVisible(true)}
-              >
-                Version History
-              </Menu.Item>
-              <Menu.Item key="feedback" icon={<MailOutlined />} onClick={showFeedbackModal}>
-                Feedback
-              </Menu.Item>
-            </SubMenu>
-          )}
-        </Menu>
+        <Menu mode="inline" selectedKeys={[location.pathname]} items={menuItems} />
       </Sider>
       <Layout
         style={{

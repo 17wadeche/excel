@@ -7,6 +7,7 @@ const urlProd = process.env.ADDIN_BASE_URL || "https://example.com/workbook-dash
 const supportUrl = process.env.ADDIN_SUPPORT_URL || "https://example.com/workbook-dashboard/support";
 const appDomain = process.env.ADDIN_APP_DOMAIN || new URL(urlProd).origin;
 const apiBaseUrl = process.env.DASHBOARD_API_BASE_URL || "/api";
+const useLocalApiFallback = process.env.DASHBOARD_USE_LOCAL_API_FALLBACK || "";
 async function getHttpsOptions() {
   const httpsOptions = await devCerts.getHttpsServerOptions();
   return { ca: httpsOptions.ca, key: httpsOptions.key, cert: httpsOptions.cert };
@@ -102,6 +103,7 @@ module.exports = async (env, options) => {
       new webpack.DefinePlugin({
         DASHBOARD_API_BASE_URL: JSON.stringify(apiBaseUrl),
         DASHBOARD_DEV_USER_EMAIL: JSON.stringify(process.env.DASHBOARD_DEV_USER_EMAIL || ""),
+        DASHBOARD_USE_LOCAL_API_FALLBACK: JSON.stringify(useLocalApiFallback),
       }),
     ],
     devServer: {

@@ -37,7 +37,7 @@ The development manifest points at `https://localhost:3000`. Production builds r
 
 ## Backend API contract
 
-The add-in expects these JSON endpoints under `/api` by default. Override the base URL with `DASHBOARD_API_BASE_URL` at build time or by assigning `window.__API_BASE_URL__` before the task pane starts:
+The add-in expects these JSON endpoints under `/api` by default. Localhost development uses an in-browser localStorage API fallback unless you set `DASHBOARD_USE_LOCAL_API_FALLBACK=false`. Override the backend base URL with `DASHBOARD_API_BASE_URL` at build time or by assigning `window.__API_BASE_URL__` before the task pane starts:
 
 - `GET /dashboards?workbookId=<id>&userEmail=<email>`
 - `GET /dashboards/:id`
@@ -70,4 +70,4 @@ Dashboard payloads should match the `DashboardItem` interface in `src/taskpane/c
 - The API client adds request IDs, authorization headers from Office SSO when available, idempotency keys for write requests, timeouts, and retry handling for transient server errors.
 - Dashboard saves validate payload shape before syncing and download a JSON backup if syncing fails.
 - Excel range import analyzes the selected range, detects header rows, supports multiple numeric series, and records the source range for refreshes.
-- Production identity should come from Office SSO; localStorage user email is retained only as a development fallback.
+- Production identity should come from Office SSO; localStorage user email and the localStorage API fallback are retained only for local development.

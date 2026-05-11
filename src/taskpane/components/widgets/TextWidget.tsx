@@ -12,7 +12,7 @@ const TextWidget: React.FC<TextWidgetProps> = ({ data }) => {
   return (
     <Card
       className="text-widget widget-card"
-      bordered={false}
+      variant="borderless"
       style={{
         backgroundColor: data.backgroundColor || "white",
         boxShadow: "none",

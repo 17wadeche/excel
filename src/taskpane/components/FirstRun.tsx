@@ -27,7 +27,7 @@ const FirstRun: React.FC = () => {
   const hasDashboards = dashboards.length > 0;
   return (
     <div style={{ padding: 24 }}>
-      <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      <Space orientation="vertical" size="large" style={{ width: "100%" }}>
         <div>
           <Title level={2}>Welcome to Workbook Dashboard</Title>
           <Paragraph>
@@ -39,7 +39,7 @@ const FirstRun: React.FC = () => {
           <Alert
             type="warning"
             showIcon
-            message="Workbook identity not found yet"
+            title="Workbook identity not found yet"
             description="Create a dashboard to stamp this workbook with an add-in identity, or reopen the task pane after the workbook is ready."
           />
         )}
@@ -47,17 +47,17 @@ const FirstRun: React.FC = () => {
           <Alert
             type="info"
             showIcon
-            message="User identity is not configured"
+            title="User identity is not configured"
             description="You can keep using the add-in locally, but production deployments should connect this to your organization sign-in flow."
           />
         )}
         {isFetching ? (
-          <Spin tip="Checking for dashboards in this workbook..." />
+          <Spin description="Checking for dashboards in this workbook..." />
         ) : hasDashboards ? (
           <Alert
             type="success"
             showIcon
-            message={`Found ${dashboards.length} dashboard${dashboards.length === 1 ? "" : "s"} for this workbook`}
+            title={`Found ${dashboards.length} dashboard${dashboards.length === 1 ? "" : "s"} for this workbook`}
             action={
               <Button onClick={() => navigate("/dashboard-list")}>Open Dashboard List</Button>
             }
@@ -66,7 +66,7 @@ const FirstRun: React.FC = () => {
           <Alert
             type="info"
             showIcon
-            message="No dashboards found for this workbook"
+            title="No dashboards found for this workbook"
             description="Start with a blank dashboard, select worksheet data, or import an existing Excel chart image."
           />
         )}

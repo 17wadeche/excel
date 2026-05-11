@@ -4,7 +4,7 @@ import { message } from "antd";
 import { logger } from "../utils/logger";
 import { getWorkbookIdFromProperties } from "../utils/excelUtils";
 import { getAuthSession } from "../utils/auth";
-import { setApiAuthTokenProvider } from "../utils/apiClient";
+import { isUsingLocalApiFallback, setApiAuthTokenProvider } from "../utils/apiClient";
 interface UseWorkbookIdentityOptions {
   currentWorkbookId: string;
   setCurrentWorkbookId: (workbookId: string) => void;
@@ -33,6 +33,13 @@ export const useWorkbookIdentity = ({
         );
         if (isMounted) {
           setUserEmail(storedEmail.toLowerCase());
+        }
+        return;
+      }
+      if (isUsingLocalApiFallback()) {
+        logger.debug("Using local development dashboard identity.");
+        if (isMounted) {
+          setUserEmail("local-dev@workbook-dashboard.local");
         }
         return;
       }

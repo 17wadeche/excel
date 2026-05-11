@@ -115,7 +115,7 @@ const ReportsList: React.FC = () => {
         <Divider />
         {loading ? (
           <div style={{ textAlign: 'center', padding: '50px 0' }}>
-            <Spin tip="Loading Reports..." size="large" />
+            <Spin description="Loading Reports..." size="large" />
           </div>
         ) : filteredReports.length === 0 ? (
           <Empty description="No Reports Found" />
