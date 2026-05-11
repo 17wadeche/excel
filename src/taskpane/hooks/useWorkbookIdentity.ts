@@ -3,6 +3,8 @@ import { useEffect } from "react";
 import { message } from "antd";
 import { logger } from "../utils/logger";
 import { getWorkbookIdFromProperties } from "../utils/excelUtils";
+import { getAuthSession } from "../utils/auth";
+import { setApiAuthTokenProvider } from "../utils/apiClient";
 interface UseWorkbookIdentityOptions {
   currentWorkbookId: string;
   setCurrentWorkbookId: (workbookId: string) => void;
@@ -14,13 +16,36 @@ export const useWorkbookIdentity = ({
   setUserEmail,
 }: UseWorkbookIdentityOptions) => {
   useEffect(() => {
-    const storedEmail = localStorage.getItem("userEmail");
-    if (storedEmail) {
-      setUserEmail(storedEmail);
-      return;
-    }
-    logger.warn("User email not found in localStorage.");
-    setUserEmail("");
+    let isMounted = true;
+    setApiAuthTokenProvider(async () => (await getAuthSession())?.accessToken ?? null);
+    const initializeUser = async () => {
+      const session = await getAuthSession();
+      if (session?.userEmail) {
+        if (isMounted) {
+          setUserEmail(session.userEmail.toLowerCase());
+        }
+        return;
+      }
+      const storedEmail = localStorage.getItem("userEmail");
+      if (storedEmail) {
+        logger.warn(
+          "Using development user email from localStorage. Configure Microsoft 365 SSO for production."
+        );
+        if (isMounted) {
+          setUserEmail(storedEmail.toLowerCase());
+        }
+        return;
+      }
+      logger.warn("User email not found in authenticated session or localStorage.");
+      if (isMounted) {
+        setUserEmail("");
+      }
+    };
+    initializeUser();
+    return () => {
+      isMounted = false;
+      setApiAuthTokenProvider(null);
+    };
   }, [setUserEmail]);
   useEffect(() => {
     if (currentWorkbookId) {

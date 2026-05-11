@@ -25,7 +25,9 @@
     "validate": "office-addin-manifest validate manifest.xml",
     "watch": "webpack --mode development --watch",
     "typecheck": "tsc --noEmit",
-    "test": "npm run typecheck"
+    "test": "npm run typecheck && npm run unit",
+    "unit": "node scripts/run-unit-tests.js",
+    "validate:manifest:prod": "node scripts/validate-manifest-env.js manifest.xml --production"
   },
   "dependencies": {
     "@ant-design/icons": "^6.2.2",

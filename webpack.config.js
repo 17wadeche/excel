@@ -3,7 +3,10 @@ const CopyWebpackPlugin = require("copy-webpack-plugin");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const webpack = require("webpack");
 const urlDev = "https://localhost:3000/";
-const urlProd = "https://example.com/workbook-dashboard/";
+const urlProd = process.env.ADDIN_BASE_URL || "https://example.com/workbook-dashboard/";
+const supportUrl = process.env.ADDIN_SUPPORT_URL || "https://example.com/workbook-dashboard/support";
+const appDomain = process.env.ADDIN_APP_DOMAIN || new URL(urlProd).origin;
+const apiBaseUrl = process.env.DASHBOARD_API_BASE_URL || "/api";
 async function getHttpsOptions() {
   const httpsOptions = await devCerts.getHttpsServerOptions();
   return { ca: httpsOptions.ca, key: httpsOptions.key, cert: httpsOptions.cert };
@@ -78,7 +81,11 @@ module.exports = async (env, options) => {
               if (dev) {
                 return content;
               } else {
-                return content.toString().replace(new RegExp(urlDev, "g"), urlProd);
+                return content
+                  .toString()
+                  .replace(new RegExp(urlDev, "g"), urlProd)
+                  .replace(/https:\/\/example\.com\/workbook-dashboard\/support/g, supportUrl)
+                  .replace(/https:\/\/example\.com/g, appDomain);
               }
             },
           },
@@ -91,6 +98,10 @@ module.exports = async (env, options) => {
       }),
       new webpack.ProvidePlugin({
         Promise: ["es6-promise", "Promise"],
+      }),
+      new webpack.DefinePlugin({
+        DASHBOARD_API_BASE_URL: JSON.stringify(apiBaseUrl),
+        DASHBOARD_DEV_USER_EMAIL: JSON.stringify(process.env.DASHBOARD_DEV_USER_EMAIL || ""),
       }),
     ],
     devServer: {

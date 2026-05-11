@@ -26,6 +26,8 @@ import { message, Modal } from "antd";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { dashboardApi, templateApi } from "../utils/apiClient";
+import { buildChartDataFromRange } from "../utils/dataImport";
+import { validateDashboardPayload, createBackupFileName } from "../utils/dashboardValidation";
 import { logger } from "../utils/logger";
 import PromptWidgetDetailsModal from "../components/PromptWidgetDetailsModal";
 import { DashboardBorderSettings } from "../components/types";
@@ -103,7 +105,8 @@ interface DashboardContextProps {
     newValue: number,
     worksheetName: string,
     cellAddress: string
-  ) => Promise<void>;  currentTemplateId: string | null;
+  ) => Promise<void>;
+  currentTemplateId: string | null;
   setCurrentTemplateId: (id: string | null) => void;
   setDashboards: React.Dispatch<React.SetStateAction<DashboardItem[]>>;
   applyDataValidation: () => void;
@@ -1087,6 +1090,10 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       if (!dashboard.userEmail) {
         dashboard.userEmail = userEmail;
       }
+      const validation = validateDashboardPayload(dashboard);
+      if (!validation.valid) {
+        throw new Error(`Dashboard validation failed: ${validation.errors.join("; ")}`);
+      }
       const response = await dashboardApi.update(dashboard.id, dashboard);
       const updated = response.data as DashboardItem;
       setDashboards((prevDashboards) => {
@@ -1100,7 +1107,8 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       });
     } catch (err) {
       logger.error("Error updating dashboard on server:", err);
-      message.error("Failed to update dashboard on server.");
+      downloadDashboardBackup(dashboard);
+      message.error("Failed to update dashboard on server. A local JSON backup was downloaded.");
       throw err;
     }
   };
@@ -1661,19 +1669,16 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
           const imageResults = await Promise.all(imagePromises);
           setWidgets((prevWidgets: Widget[]) => {
             const nonImageWidgets = prevWidgets.filter((widget: Widget) => widget.type !== "image");
-            let imageWidgets = prevWidgets.filter((widget: Widget) => widget.type === "image");
-            imageResults.forEach((base64Image, index) => {
-              if (imageWidgets[index]) {
-                imageWidgets[index].data.src = `data:image/png;base64,${base64Image}`;
-              } else {
-                imageWidgets.push({
-                  id: `image-${uuidv4()}`,
-                  type: "image",
-                  data: { src: `data:image/png;base64,${base64Image}` },
-                });
-              }
+            const existingImageWidgets = prevWidgets.filter(
+              (widget: Widget) => widget.type === "image"
+            );
+            const imageWidgets = imageResults.map((base64Image, index) => {
+              const existingWidget = existingImageWidgets[index];
+              return {
+                ...(existingWidget ?? { id: `image-${uuidv4()}`, type: "image" as const }),
+                data: { src: `data:image/png;base64,${base64Image}` },
+              } as Widget;
             });
-            imageWidgets = imageWidgets.slice(0, imageResults.length);
             const updatedWidgets = [...nonImageWidgets, ...imageWidgets];
             const updatedDashboard = {
               ...currentDashboard,
@@ -2175,33 +2180,28 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
     try {
       await Excel.run(async (context: Excel.RequestContext) => {
         const sheet = context.workbook.worksheets.getActiveWorksheet();
-        const range = sheet.getUsedRange();
+        const range = selectedRangeAddress
+          ? sheet.getRange(selectedRangeAddress)
+          : context.workbook.getSelectedRange();
         range.load(["address", "values"]);
+        sheet.load("name");
         await context.sync();
         const data: any[][] = range.values;
         if (data.length > 1) {
-          const labels = data.slice(1).map((row: any[]) => row[0].toString());
-          const values = data.slice(1).map((row: any[]) => Number(row[1]));
-          const associatedRange = range.address.toLowerCase();
-          const chartData: ChartData = {
-            type: "bar",
-            title: "Imported Data",
-            labels,
-            datasets: [
-              {
-                label: "Data from Excel",
-                data: values,
-                backgroundColor: "#4caf50",
-              },
-            ],
-            titleAlignment: "left",
-            associatedRange: associatedRange,
-            worksheetName: sheet.name,
-          };
+          const chartData: ChartData = buildChartDataFromRange(
+            data,
+            range.address,
+            sheet.name,
+            "Imported Data"
+          );
+          if (!chartData.datasets.length) {
+            message.warning("No numeric value columns were found in the selected range.");
+            return;
+          }
           addWidgetFunc("chart", chartData);
-          message.success("Data imported from Excel successfully.");
+          message.success("Selected Excel data imported successfully.");
         } else {
-          message.warning("No data found in the active worksheet.");
+          message.warning("No data found in the selected range.");
         }
       });
     } catch (error) {
@@ -2689,6 +2689,17 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       .replace(/^-+|-+$/g, "")
       .toLowerCase();
     return { pdf, fileName: `${safeTitle || "dashboard"}.pdf` };
+  };
+  const downloadDashboardBackup = (dashboard: DashboardItem) => {
+    const blob = new Blob([JSON.stringify(dashboard, null, 2)], { type: "application/json" });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = createBackupFileName(dashboard.title || dashboardTitle);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
   };
   const exportDashboardAsPDF = async (): Promise<void> => {
     try {

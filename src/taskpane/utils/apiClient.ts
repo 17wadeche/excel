@@ -4,10 +4,15 @@ type RuntimeConfig = typeof window & {
   __API_BASE_URL__?: string;
   __API_AUTH_TOKEN__?: string;
 };
+type AuthTokenProvider = () => Promise<string | null> | string | null;
 const runtimeWindow = window as RuntimeConfig;
-const API_BASE_URL = runtimeWindow.__API_BASE_URL__ ?? "/api";
+const getApiBaseUrl = () => runtimeWindow.__API_BASE_URL__ ?? "/api";
 const DEFAULT_TIMEOUT_MS = 15000;
 const DEFAULT_RETRY_ATTEMPTS = 2;
+let authTokenProvider: AuthTokenProvider | null = null;
+export const setApiAuthTokenProvider = (provider: AuthTokenProvider | null) => {
+  authTokenProvider = provider;
+};
 export interface ApiResponse<T> {
   data: T;
   requestId: string;
@@ -26,7 +31,8 @@ export class ApiError extends Error {
 }
 type QueryValue = string | number | boolean | null | undefined;
 const buildUrl = (path: string, params?: Record<string, QueryValue>): string => {
-  const normalizedBase = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  const apiBaseUrl = getApiBaseUrl();
+  const normalizedBase = apiBaseUrl.endsWith("/") ? apiBaseUrl.slice(0, -1) : apiBaseUrl;
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const baseUrl = normalizedBase.startsWith("http")
     ? normalizedBase
@@ -45,11 +51,13 @@ const createRequestId = () => {
   }
   return `req-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 };
-const getAuthHeaders = (): Record<string, string> => {
-  if (!runtimeWindow.__API_AUTH_TOKEN__) {
+const getAuthHeaders = async (): Promise<Record<string, string>> => {
+  const providedToken = authTokenProvider ? await authTokenProvider() : null;
+  const token = providedToken || runtimeWindow.__API_AUTH_TOKEN__;
+  if (!token) {
     return {};
   }
-  return { Authorization: `Bearer ${runtimeWindow.__API_AUTH_TOKEN__}` };
+  return { Authorization: `Bearer ${token}` };
 };
 const isRetryableStatus = (status: number) => status === 408 || status === 429 || status >= 500;
 const waitForRetry = (attempt: number) =>
@@ -62,17 +70,20 @@ const request = async <T>(
 ): Promise<ApiResponse<T>> => {
   const requestId = createRequestId();
   const method = options.method ?? "GET";
-  const canRetry = method === "GET" || method === "DELETE";
+  const requestIdempotencyKey = createRequestId();
+  const canRetry = ["GET", "DELETE", "PUT", "POST", "PATCH"].includes(method);
   for (let attempt = 0; attempt <= attempts; attempt += 1) {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
     try {
+      const authHeaders = await getAuthHeaders();
       const response = await fetch(buildUrl(path, params), {
         ...options,
         headers: {
           "Content-Type": "application/json",
           "X-Request-Id": requestId,
-          ...getAuthHeaders(),
+          ...authHeaders,
+          ...(method === "GET" ? {} : { "Idempotency-Key": requestIdempotencyKey }),
           ...options.headers,
         },
         signal: controller.signal,

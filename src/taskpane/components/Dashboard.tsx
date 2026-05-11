@@ -53,6 +53,7 @@ import jsPDF from "jspdf";
 import PresentationDashboard from "./PresentationDashboard";
 import { dashboardApi } from "../utils/apiClient";
 import { logger } from "../utils/logger";
+import { validateDashboardPayload, createBackupFileName } from "../utils/dashboardValidation";
 import { useParams } from "react-router-dom";
 const defaultTitleWidget: Widget = {
   id: "dashboard-title",
@@ -184,6 +185,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
     const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
     const [saveStatusMessage, setSaveStatusMessage] = useState("Saved");
     const hasTrackedInitialDashboardState = useRef(false);
+    const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
     const dashboardWidth = dashboardBorderSettings.width
       ? Math.min(Math.max(dashboardBorderSettings.width, 300), 733)
       : 733;
@@ -328,10 +330,24 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
         prevLayoutsRef.current = currentDashboard.layouts;
       }
     }, [currentDashboard, setLayouts]);
+    const downloadDashboardBackup = useCallback(
+      (dashboard: DashboardItem) => {
+        const blob = new Blob([JSON.stringify(dashboard, null, 2)], { type: "application/json" });
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = createBackupFileName(dashboard.title || dashboardTitle);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+      },
+      [dashboardTitle]
+    );
     const handleSave = useCallback(async () => {
       if (!currentDashboardId || !currentDashboard) return;
-      setIsSaving(true);
-      try {
+      const saveOperation = async () => {
+        setIsSaving(true);
         const updatedDashboard: DashboardItem = {
           ...currentDashboard,
           workbookId: currentWorkbookId,
@@ -340,30 +356,38 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
           title: dashboardTitle,
           borderSettings: dashboardBorderSettings,
         };
-        const res = await dashboardApi.update(currentDashboardId, updatedDashboard);
-        const savedDashboard = res.data;
-        setCurrentDashboard(savedDashboard);
-        setDashboards((prev: DashboardItem[]) => {
-          const idx = prev.findIndex((d: DashboardItem) => d.id === savedDashboard.id);
-          if (idx === -1) {
-            return [...prev, savedDashboard];
-          } else {
+        try {
+          const validation = validateDashboardPayload(updatedDashboard);
+          if (!validation.valid) {
+            throw new Error(`Dashboard validation failed: ${validation.errors.join("; ")}`);
+          }
+          const res = await dashboardApi.update(currentDashboardId, updatedDashboard);
+          const savedDashboard = res.data;
+          setCurrentDashboard(savedDashboard);
+          setDashboards((prev: DashboardItem[]) => {
+            const idx = prev.findIndex((d: DashboardItem) => d.id === savedDashboard.id);
+            if (idx === -1) {
+              return [...prev, savedDashboard];
+            }
             const newDashboards = [...prev];
             newDashboards[idx] = savedDashboard;
             return newDashboards;
-          }
-        });
-        setHasUnsavedChanges(false);
-        setLastSavedAt(new Date());
-        setSaveStatusMessage("Saved");
-        message.success("Dashboard saved successfully!");
-      } catch (err) {
-        logger.error("Error saving dashboard:", err);
-        setSaveStatusMessage("Save failed - local changes not synced");
-        message.error("Failed to save changes to server.");
-      } finally {
-        setIsSaving(false);
-      }
+          });
+          setHasUnsavedChanges(false);
+          setLastSavedAt(new Date());
+          setSaveStatusMessage("Saved");
+          message.success("Dashboard saved successfully!");
+        } catch (err) {
+          logger.error("Error saving dashboard:", err);
+          downloadDashboardBackup(updatedDashboard);
+          setSaveStatusMessage("Save failed - backup downloaded");
+          message.error("Failed to save changes to server. A local JSON backup was downloaded.");
+        } finally {
+          setIsSaving(false);
+        }
+      };
+      saveQueueRef.current = saveQueueRef.current.then(saveOperation, saveOperation);
+      await saveQueueRef.current;
     }, [
       currentDashboardId,
       currentDashboard,
@@ -374,6 +398,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
       dashboardBorderSettings,
       setCurrentDashboard,
       setDashboards,
+      downloadDashboardBackup,
     ]);
     const isSavingRef = useRef(isSaving);
     useEffect(() => {
@@ -395,14 +420,23 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
       }
       if (isSavingRef.current) return;
       setHasUnsavedChanges(true);
-      setSaveStatusMessage(isAutoSaveEnabled ? "Unsaved changes - autosave pending" : "Unsaved changes");
+      setSaveStatusMessage(
+        isAutoSaveEnabled ? "Unsaved changes - autosave pending" : "Unsaved changes"
+      );
       if (isAutoSaveEnabled) {
         debouncedSave();
       }
       return () => {
         debouncedSave.cancel();
       };
-    }, [widgets, layouts, dashboardTitle, dashboardBorderSettings, isAutoSaveEnabled, debouncedSave]);
+    }, [
+      widgets,
+      layouts,
+      dashboardTitle,
+      dashboardBorderSettings,
+      isAutoSaveEnabled,
+      debouncedSave,
+    ]);
     useEffect(() => {
       const handleBeforeUnload = (event: BeforeUnloadEvent) => {
         if (!hasUnsavedChanges) return;
@@ -419,7 +453,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
       React.ComponentProps<typeof ResponsiveGridLayout>["onDragStart"]
     >;
     const cloneLayout = <T extends object>(layout?: readonly T[]): GridLayoutItem[] =>
-      layout ? layout.map((item) => ({ ...item } as GridLayoutItem)) : [];
+      layout ? layout.map((item) => ({ ...item }) as GridLayoutItem) : [];
     const handleLayoutChange = useCallback<RglLayoutChangeHandler>(
       (_currentLayout, allLayouts) => {
         const syncedLayouts: { [key: string]: GridLayoutItem[] } = { ...layouts };
@@ -428,13 +462,12 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
           syncedLayouts[bp] = cloneLayout(sourceLayout);
         });
         setLayouts(syncedLayouts);
-        const mutableAllLayouts = Object.entries(allLayouts).reduce<{ [key: string]: GridLayoutItem[] }>(
-          (acc, [bp, layout]) => {
-            acc[bp] = cloneLayout(layout);
-            return acc;
-          },
-          {}
-        );
+        const mutableAllLayouts = Object.entries(allLayouts).reduce<{
+          [key: string]: GridLayoutItem[];
+        }>((acc, [bp, layout]) => {
+          acc[bp] = cloneLayout(layout);
+          return acc;
+        }, {});
         if (!isEqual(mutableAllLayouts, prevLayoutsRef.current)) {
           prevLayoutsRef.current = mutableAllLayouts;
           logger.debug("Layouts updated locally (not saved).");
@@ -537,7 +570,9 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
               tasks={(widget.data as GanttWidgetData).tasks}
               title={(widget.data as GanttWidgetData).title}
               arrowColor={(widget.data as GanttWidgetData).arrowColor ?? "#7d7d7d"}
-              defaultProgressColor={(widget.data as GanttWidgetData).defaultProgressColor ?? "#1890ff"}
+              defaultProgressColor={
+                (widget.data as GanttWidgetData).defaultProgressColor ?? "#1890ff"
+              }
             />
           );
         } else if (widget.type === "metric") {
@@ -661,7 +696,9 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
                 </Tooltip>
                 <div className="toolbar-save-status" aria-live="polite">
                   {saveStatusMessage}
-                  {lastSavedAt ? ` ${lastSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}
+                  {lastSavedAt
+                    ? ` ${lastSavedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                    : ""}
                 </div>
                 <Tooltip title="Toggle Auto-Save" placement="left">
                   <Switch
@@ -756,7 +793,12 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
             </div>
           )}
           {isPresentationMode && <PresentationDashboard />}
-          <Modal title="Edit Widget" open={isModalVisible} onCancel={handleModalCancel} footer={null}>
+          <Modal
+            title="Edit Widget"
+            open={isModalVisible}
+            onCancel={handleModalCancel}
+            footer={null}
+          >
             {currentWidget && (
               <EditWidgetForm
                 widget={currentWidget}
