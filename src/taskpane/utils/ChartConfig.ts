@@ -1,5 +1,4 @@
 // src/taskpane/utils/ChartConfig.ts
-
 import {
   Chart,
   CategoryScale,
@@ -13,9 +12,7 @@ import {
   Legend,
   Filler,
   RadialLinearScale,
-} from 'chart.js';
-
-// Register necessary components
+} from "chart.js";
 Chart.register(
   CategoryScale,
   LinearScale,
@@ -23,7 +20,7 @@ Chart.register(
   LineElement,
   PointElement,
   ArcElement,
-  RadialLinearScale, // Added RadialLinearScale for Radar and PolarArea charts
+  RadialLinearScale,
   Title,
   Tooltip,
   Legend,

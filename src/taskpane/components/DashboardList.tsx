@@ -1,18 +1,16 @@
 // src/taskpane/components/DashboardList.tsx
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useMemo, useState } from 'react';
 import {
   Layout,
   List,
   Button,
   Typography,
   Modal,
-  message,
   Card,
   Tooltip,
   Row,
   Col,
   Input,
-  Spin,
   Divider,
   Empty,
 } from 'antd';
@@ -21,10 +19,11 @@ import {
   EditOutlined,
   PlusOutlined,
   SearchOutlined,
+  EyeOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { DashboardContext } from '../context/DashboardContext';
-import { DashboardItem } from './types'; // Adjust the path as needed
+import './DashboardList.css';
 const { Content } = Layout;
 const { Title } = Typography;
 const { Search } = Input;
@@ -32,28 +31,18 @@ const DashboardList: React.FC = () => {
   const { dashboards, deleteDashboard } = useContext(DashboardContext)!;
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
-  const [filteredDashboards, setFilteredDashboards] = useState<DashboardItem[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  useEffect(() => {
-    setLoading(true);
-    const timer = setTimeout(() => {
-      const filtered = dashboards.filter((dashboard) =>
-        dashboard.title.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setFilteredDashboards(filtered);
-      setLoading(false);
-    }, 300); // Debounce search by 300ms
-    return () => clearTimeout(timer);
-  }, [dashboards, searchTerm]);
+  const filteredDashboards = useMemo(
+    () => dashboards.filter((dashboard) => dashboard.title.toLowerCase().includes(searchTerm.toLowerCase())),
+    [dashboards, searchTerm]
+  );
   const handleDelete = (id: string) => {
     Modal.confirm({
       title: 'Are you sure you want to delete this dashboard?',
       okText: 'Yes',
       okType: 'danger',
       cancelText: 'No',
-      onOk: () => {
-        deleteDashboard(id);
-        message.success('Dashboard deleted successfully!');
+      onOk: async () => {
+        await deleteDashboard(id);
       },
       maskClosable: true,
     });
@@ -101,11 +90,7 @@ const DashboardList: React.FC = () => {
           </Col>
         </Row>
         <Divider />
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '50px 0' }}>
-            <Spin tip="Loading Dashboards..." size="large" />
-          </div>
-        ) : filteredDashboards.length === 0 ? (
+        {filteredDashboards.length === 0 ? (
           <Empty description="No Dashboards Found" />
         ) : (
           <List
@@ -124,11 +109,24 @@ const DashboardList: React.FC = () => {
                 <Card
                   hoverable
                   actions={[
+                    <Tooltip title="View Dashboard" key="view">
+                      <Button
+                        type="text"
+                        icon={<EyeOutlined />}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleView(dashboard.id);
+                        }}
+                      />
+                    </Tooltip>,
                     <Tooltip title="Edit Dashboard" key="edit">
                       <Button
                         type="text"
                         icon={<EditOutlined />}
-                        onClick={() => handleEdit(dashboard.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleEdit(dashboard.id);
+                        }}
                       />
                     </Tooltip>,
                     <Tooltip title="Delete Dashboard" key="delete">
@@ -136,24 +134,21 @@ const DashboardList: React.FC = () => {
                         type="text"
                         danger
                         icon={<DeleteOutlined />}
-                        onClick={() => handleDelete(dashboard.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDelete(dashboard.id);
+                        }}
                       />
                     </Tooltip>,
                   ]}
-                  style={{
-                    borderRadius: '12px',
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                    transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.transform = 'scale(1.03)';
-                    (e.currentTarget as HTMLElement).style.boxShadow =
-                      '0 8px 24px rgba(0, 0, 0, 0.2)';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
-                    (e.currentTarget as HTMLElement).style.boxShadow =
-                      '0 4px 12px rgba(0, 0, 0, 0.1)';
+                  className="dashboard-list-card"
+                  tabIndex={0}
+                  onClick={() => handleView(dashboard.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      handleView(dashboard.id);
+                    }
                   }}
                 >
                   <Card.Meta

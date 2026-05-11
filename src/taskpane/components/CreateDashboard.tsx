@@ -24,23 +24,18 @@ import {
   FolderAddOutlined,
 } from '@ant-design/icons';
 import { v4 as uuidv4 } from 'uuid';
-import { dashboardApi } from '../utils/apiClient';
 import { logger } from "../utils/logger";
 import { setWorkbookIdInProperties } from '../utils/excelUtils';
-import { DashboardItem } from './types';
+import { DashboardItem, GridLayoutItem, Widget } from './types';
 const { Content } = Layout;
 const { Search } = Input;
-interface Widget {
-  id: string;
-  title: string;
-  content: string;
-}
 interface Template {
   id: string;
   name: string;
   description?: string;
   widgets: Widget[];
   thumbnailUrl?: string;
+  layouts?: { [key: string]: GridLayoutItem[] };
 }
 const CreateDashboard: React.FC = () => {
   const [dashboardTitle, setDashboardTitle] = useState('');
@@ -53,7 +48,7 @@ const CreateDashboard: React.FC = () => {
     setDashboardTitle: setContextTitle,
     setWidgets,
     setCurrentTemplateId,
-    setDashboards,
+    addDashboard,
     setCurrentWorkbookId,
     setCurrentDashboardId,
     currentWorkbookId,
@@ -88,20 +83,10 @@ const CreateDashboard: React.FC = () => {
         workbookId,
         userEmail, // required by DashboardItem
       };
-      try {
-        const response = await dashboardApi.create(newDashboard);
-        const saved = response.data ?? newDashboard;
-        setDashboards((prev) => [...prev, saved]);
-        setCurrentDashboardId(saved.id);
-        message.success('Dashboard created successfully!');
-        navigate(`/dashboard/${saved.id}`);
-      } catch (serverErr) {
-        logger.error('Server save failed, adding locally:', serverErr);
-        setDashboards((prev) => [...prev, newDashboard]);
-        setCurrentDashboardId(newDashboard.id);
-        message.warning('Dashboard created locally (server save failed).');
-        navigate(`/dashboard/${newDashboard.id}`);
-      }
+      const saved = await addDashboard(newDashboard);
+      setCurrentDashboardId(saved.id);
+      message.success('Dashboard created successfully!');
+      navigate(`/dashboard/${saved.id}`);
     } catch (error) {
       logger.error(error);
       message.error('Failed to create dashboard. Please try again.');
@@ -109,7 +94,7 @@ const CreateDashboard: React.FC = () => {
       setLoading(false);
     }
   };
-  const createDashboardFromTemplate = (template: any) => {
+  const createDashboardFromTemplate = async (template: Template) => {
     if (!currentWorkbookId) {
       message.error('No workbook ID found. Cannot create dashboard from template.');
       return;
@@ -120,14 +105,20 @@ const CreateDashboard: React.FC = () => {
       components: template.widgets || [],
       layouts: template.layouts || {},
       workbookId: currentWorkbookId,
-      userEmail, // required by DashboardItem
+      userEmail,
     };
-    setDashboards((prev) => [...prev, newDashboard]);
-    setCurrentDashboardId(newDashboard.id);
-    navigate(`/dashboard/${newDashboard.id}`);
-    message.success(`Dashboard "${newDashboard.title}" created from template!`);
+
+    try {
+      const saved = await addDashboard(newDashboard);
+      setCurrentDashboardId(saved.id);
+      navigate(`/dashboard/${saved.id}`);
+      message.success(`Dashboard "${saved.title}" created from template!`);
+    } catch (error) {
+      logger.error('Failed to create dashboard from template:', error);
+      message.error('Failed to create dashboard from template.');
+    }
   };
-  const editTemplate = (template: any) => {
+  const editTemplate = (template: Template) => {
     setContextTitle(template.name || 'Untitled Template');
     setWidgets(template.widgets || []);
     setCurrentTemplateId(template.id);

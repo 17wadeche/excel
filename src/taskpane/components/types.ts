@@ -1,7 +1,15 @@
 // src/taskpane/components/types.ts
 import { ColumnType } from "antd/lib/table/interface";
 import { ChartType as ChartJsType, ChartDataset } from "chart.js";
-export type WidgetType = "title" | "text" | "chart" | "gantt" | "image" | "metric" | "table" | "line";
+export type WidgetType =
+  | "title"
+  | "text"
+  | "chart"
+  | "gantt"
+  | "image"
+  | "metric"
+  | "table"
+  | "line";
 export interface TitleWidgetData {
   content: string;
   fontSize: number;
@@ -243,7 +251,7 @@ export interface DashboardBorderSettings {
 export interface ImageWidgetData {
   src: string;
 }
-export {ChartDataset};
+export { ChartDataset };
 export type ComponentData = TextData | ChartData | GanttWidgetData;
 export type DashboardComponent = Widget;
 export type GridLayoutItem = LayoutItem;

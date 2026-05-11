@@ -5,28 +5,34 @@
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "forceConsistentCasingInFileNames": true,
-
     "jsx": "react",
     "module": "ES2020",
     "moduleResolution": "bundler",
-
     "rootDir": "./src",
     "outDir": "dist",
-
     "noImplicitReturns": true,
     "noUnusedParameters": true,
     "removeComments": false,
     "sourceMap": true,
     "strict": true,
-
     "target": "ES2017",
-    "lib": ["ES2017", "DOM", "DOM.Iterable"],
-
+    "lib": [
+      "ES2017", 
+      "DOM", 
+      "DOM.Iterable"
+    ],
     "pretty": true,
-    "typeRoots": ["node_modules/@types"]
+    "typeRoots": [
+      "node_modules/@types"
+    ],
+    "skipLibCheck": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules"],
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules"
+  ],
   "compileOnSave": false,
   "buildOnSave": false,
   "ts-node": {

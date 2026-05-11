@@ -1,9 +1,9 @@
 {
-  "name": "office-addin-taskpane-react",
-  "version": "0.0.1",
+  "name": "workbook-dashboard-addin",
+  "version": "1.0.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/OfficeDev/Office-Addin-TaskPane-React.git"
+    "url": "https://github.com/your-org/workbook-dashboard-addin.git"
   },
   "license": "MIT",
   "config": {
@@ -23,7 +23,9 @@
     "start": "office-addin-debugging start manifest.xml",
     "stop": "office-addin-debugging stop manifest.xml",
     "validate": "office-addin-manifest validate manifest.xml",
-    "watch": "webpack --mode development --watch"
+    "watch": "webpack --mode development --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck"
   },
   "dependencies": {
     "@ant-design/icons": "^6.2.2",
@@ -31,6 +33,7 @@
     "@fluentui/react-icons": "^2.0.264",
     "@sgratzl/chartjs-chart-boxplot": "^4.4.5",
     "antd": "^6.3.7",
+    "axios": "^1.16.0",
     "chart.js": "^4.5.1",
     "chartjs-adapter-moment": "^1.0.1",
     "chartjs-chart-box-and-violin-plot": "^4.0.0",
@@ -102,7 +105,10 @@
   },
   "prettier": "office-addin-prettier-config",
   "browserslist": [
-    "last 2 versions",
-    "ie 11"
-  ]
+    "last 2 Chrome versions",
+    "last 2 Edge versions",
+    "last 2 Firefox versions",
+    "last 2 Safari versions"
+  ],
+  "description": "Excel task pane add-in for creating workbook dashboards, reports, and Gantt views."
 }

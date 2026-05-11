@@ -17,6 +17,8 @@ import {
   Task,
   TableWidget,
   TemplateItem,
+  WidgetData,
+  WidgetType,
 } from "../components/types";
 import { v4 as uuidv4 } from "uuid";
 import { Breakpoint, GRID_COLS, WIDGET_SIZES } from "../components/layoutConstants";
@@ -34,8 +36,7 @@ import "chartjs-chart-box-and-violin-plot";
 interface DashboardContextProps {
   widgets: Widget[];
   dashboards: DashboardItem[];
-  addWidget: (type: "title" | "text" | "chart" | "gantt" | "image" | "metric" | "table" | "line", data?: any) => void;
-  removeWidget: (id: string) => void;
+  addWidget: <T extends WidgetType>(type: T, data?: WidgetData<T>) => void;  removeWidget: (id: string) => void;
   updateWidget: (
     id: string,
     updatedData: Partial<
@@ -84,7 +85,7 @@ interface DashboardContextProps {
   promptForWidgetDetails: (widget: Widget, onComplete: (updatedWidget: Widget) => void) => void;
   getAvailableTables: () => Promise<{ name: string; sheetName: string; rangeAddress: string }[]>;
   editDashboard: (dashboard: DashboardItem) => Promise<void>;
-  deleteDashboard: (id: string) => void;
+  deleteDashboard: (id: string) => Promise<void>;
   undo: () => void;
   redo: () => void;
   addDashboard: (dashboard: DashboardItem) => Promise<DashboardItem>;
@@ -341,6 +342,33 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       initializeWorkbookId();
     }
   }, [currentWorkbookId]);
+  useEffect(() => {
+    if (!currentWorkbookId) {
+      return;
+    }
+    let isMounted = true;
+    const fetchDashboards = async () => {
+      setIsFetching(true);
+      try {
+        const response = await dashboardApi.list({ workbookId: currentWorkbookId, userEmail });
+        if (!isMounted) {
+          return;
+        }
+        setDashboards(response.data ?? []);
+      } catch (error) {
+        logger.error("Error loading dashboards from server:", error);
+        message.warning("Could not refresh dashboards from the server. Showing locally loaded dashboards.");
+      } finally {
+        if (isMounted) {
+          setIsFetching(false);
+        }
+      }
+    };
+    fetchDashboards();
+    return () => {
+      isMounted = false;
+    };
+  }, [currentWorkbookId, userEmail]);
   useEffect(() => {
     if (currentDashboardId && dashboards.length > 0 && currentWorkbookId) {
       const foundDashboard = dashboards.find((d) => d.id === currentDashboardId);
@@ -1081,8 +1109,10 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
     }
   };
   const deleteDashboard = async (id: string) => {
+    const previousDashboards = dashboards;
     try {
       setDashboards((prev) => prev.filter((d) => d.id !== id));
+      await dashboardApi.delete(id);
       if (currentDashboardId === id) {
         setCurrentDashboard(null);
         setCurrentDashboardId(null);
@@ -1092,8 +1122,9 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       }
       message.success("Dashboard deleted successfully!");
     } catch (err) {
+      setDashboards(previousDashboards);
       logger.error("Error deleting dashboard on server:", err);
-      message.error("Failed to delete dashboard.");
+      message.error("Failed to delete dashboard. Your dashboard list was restored.");
     }
   };
   const getAvailableTables = async (): Promise<{ name: string; sheetName: string; rangeAddress: string }[]> => {
@@ -1115,18 +1146,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
     }
   };
   const addWidgetFunc = useCallback(
-    async (
-      type: "text" | "chart" | "gantt" | "image" | "metric" | "table" | "line" | "title",
-      data?:
-        | TextData
-        | ChartData
-        | GanttWidgetData
-        | ImageWidgetData
-        | MetricData
-        | TableData
-        | LineWidgetData
-        | TitleWidgetData
-    ): Promise<void> => {
+    async <T extends WidgetType>(type: T, data?: WidgetData<T>): Promise<void> => {
       if (type === "title" && widgets.some((w) => w.type === "title")) {
         message.warning("A title widget already exists.");
         return;
@@ -1365,8 +1385,8 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       setDashboards((prev) => [...prev, saved]);
       return saved;
     } catch (err) {
-      logger.error('Error creating dashboard on server:', err);
-      setDashboards((prev) => [...prev, payload]);
+      logger.error("Error creating dashboard on server:", err);
+      message.error("Failed to create dashboard on server.");
       throw err;
     }
   };
