@@ -10,7 +10,7 @@ import '../utils/ChartConfig';
 import CustomReport from './CustomReport';
 import ReportView from './ReportView';
 import EditTemplate from './EditTemplate';
-import FirstRun from "./FirstRun";
+import FirstRun from './FirstRun';
 const App: React.FC = () => {
   return (
     <Routes>

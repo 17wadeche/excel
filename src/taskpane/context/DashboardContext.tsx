@@ -31,7 +31,6 @@ import { validateDashboardPayload, createBackupFileName } from "../utils/dashboa
 import { logger } from "../utils/logger";
 import PromptWidgetDetailsModal from "../components/PromptWidgetDetailsModal";
 import { DashboardBorderSettings } from "../components/types";
-import { getWorkbookIdFromProperties } from "../utils/excelUtils";
 import { ReportItem } from "../components/types";
 import { useWorkbookIdentity } from "../hooks/useWorkbookIdentity";
 import SelectTableModal from "../components/SelectTableModal";
