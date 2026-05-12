@@ -1,6 +1,6 @@
 // src/taskpane/components/CustomLayout.tsx
 import React, { useContext, useState } from "react";
-import { Layout, Menu, Button, Modal, Form, Input, message, Tooltip, MenuProps } from "antd";
+import { Layout, Menu, Button, Modal, Form, Input, InputNumber, message, Tooltip, MenuProps } from "antd";
 import { Link, useLocation, useNavigate, Outlet } from "react-router-dom";
 import {
   PlusOutlined,
@@ -31,8 +31,10 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
   const [isFeedbackModalVisible, setIsFeedbackModalVisible] = useState(false);
   const [feedbackForm] = Form.useForm();
   const [snapshotForm] = Form.useForm();
+  const [exportForm] = Form.useForm();
   const [isVersionHistoryVisible, setIsVersionHistoryVisible] = useState(false);
   const [isSnapshotModalVisible, setIsSnapshotModalVisible] = useState(false);
+  const [isExportModalVisible, setIsExportModalVisible] = useState(false);
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
@@ -74,6 +76,15 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
     saveDashboardVersion({ name: values.name, note: values.note });
     setIsSnapshotModalVisible(false);
     snapshotForm.resetFields();
+  };
+  const handleExportSubmit = async (values: { fileName?: string; scale?: number; margin?: number }) => {
+    await exportDashboardAsPDF({
+      fileName: values.fileName,
+      scale: values.scale,
+      margin: values.margin,
+    });
+    setIsExportModalVisible(false);
+    exportForm.resetFields();
   };
   const handleFeedbackSubmit = (values: any) => {
     const feedbackEmail = "excel.dashbooard.help@gmail.com";
@@ -166,7 +177,7 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
                 key: "export-pdf",
                 icon: <DownloadOutlined />,
                 label: "Export as PDF",
-                onClick: exportDashboardAsPDF,
+                onClick: () => setIsExportModalVisible(true),
               },
               { key: "email-dashboard", icon: <MailOutlined />, label: "Email Dashboard", onClick: emailDashboard },
               { key: "save-template", icon: <SaveOutlined />, label: "Save as Template", onClick: saveAsTemplate },
@@ -219,6 +230,32 @@ const CustomLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) =>
             {children ? children : <Outlet />}
           </div>
         </Content>
+        {isInDashboard && (
+          <Modal
+            title="Export dashboard as PDF"
+            open={isExportModalVisible}
+            onCancel={() => setIsExportModalVisible(false)}
+            onOk={() => exportForm.submit()}
+            okText="Export PDF"
+          >
+            <Form
+              form={exportForm}
+              layout="vertical"
+              initialValues={{ scale: 2, margin: 20 }}
+              onFinish={handleExportSubmit}
+            >
+              <Form.Item name="fileName" label="File name">
+                <Input placeholder="Defaults to dashboard title" />
+              </Form.Item>
+              <Form.Item name="scale" label="Image quality scale">
+                <InputNumber min={1} max={3} step={0.5} style={{ width: "100%" }} />
+              </Form.Item>
+              <Form.Item name="margin" label="Margin (points)">
+                <InputNumber min={0} max={72} style={{ width: "100%" }} />
+              </Form.Item>
+            </Form>
+          </Modal>
+        )}
         {isInDashboard && (
           <Modal
             title="Submit Feedback"

@@ -1,6 +1,12 @@
 const assert = require("assert/strict");
 const path = require("path");
 const ts = require("typescript");
+global.localStorage = {
+  store: new Map(),
+  getItem(key) { return this.store.has(key) ? this.store.get(key) : null; },
+  setItem(key, value) { this.store.set(key, String(value)); },
+  removeItem(key) { this.store.delete(key); },
+};
 require.extensions[".ts"] = (module, filename) => {
   const source = require("fs").readFileSync(filename, "utf8");
   const output = ts.transpileModule(source, {
@@ -15,6 +21,8 @@ require.extensions[".ts"] = (module, filename) => {
 };
 const { analyzeExcelRange, buildChartDataFromRange } = require(path.resolve("src/taskpane/utils/dataImport.ts"));
 const { createBackupFileName, validateDashboardPayload } = require(path.resolve("src/taskpane/utils/dashboardValidation.ts"));
+const { diffDashboardVersions, hasDashboardVersionDiff } = require(path.resolve("src/taskpane/utils/versionDiff.ts"));
+const { saveDashboardDraft, getDashboardDraft, clearDashboardDraft } = require(path.resolve("src/taskpane/utils/draftStore.ts"));
 const analysis = analyzeExcelRange([
   ["Month", "Revenue", "Cost"],
   ["Jan", 10, 4],
@@ -65,4 +73,31 @@ assert.equal(
   createBackupFileName("My Q4 Dashboard!", new Date("2026-05-11T00:00:00.000Z")),
   "my-q4-dashboard-backup-2026-05-11T00-00-00-000Z.json"
 );
+const versionDiff = diffDashboardVersions(dashboard, {
+  ...dashboard,
+  title: "Executive Dashboard Snapshot",
+  components: [
+    ...dashboard.components,
+    {
+      id: "text-1",
+      type: "text",
+      data: {
+        content: "Notes",
+        fontSize: 14,
+        textColor: "#000",
+        backgroundColor: "#fff",
+        titleAlignment: "left",
+      },
+    },
+  ],
+});
+assert.equal(versionDiff.addedWidgets, 1);
+assert.equal(versionDiff.titleChanged, true);
+assert.equal(hasDashboardVersionDiff(versionDiff), true);
+saveDashboardDraft(dashboard, "unit test");
+const draft = getDashboardDraft(dashboard.id);
+assert.equal(draft.dashboard.id, dashboard.id);
+assert.equal(draft.reason, "unit test");
+clearDashboardDraft(dashboard.id);
+assert.equal(getDashboardDraft(dashboard.id), null);
 console.log("Unit tests passed.");

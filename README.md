@@ -7,8 +7,8 @@ Workbook Dashboard is an Excel task pane add-in for building dashboards, reports
 - Create and edit dashboards inside Excel.
 - Add chart, metric, table, text, title, image, line, and Gantt widgets.
 - Import workbook chart images and table data into dashboard widgets.
-- Save dashboard versions and restore previous snapshots.
-- Export dashboards to PDF and prepare dashboard email handoff.
+- Save dashboard versions, inspect snapshot differences, restore previous snapshots, and duplicate snapshots into new dashboards.
+- Export dashboards to configurable PDF files and prepare dashboard email handoff.
 - Persist dashboards and templates through the `/api` backend endpoints.
 
 ## Getting started
@@ -34,6 +34,7 @@ The development manifest points at `https://localhost:3000`. Production builds r
 - `npm run test` — TypeScript validation plus unit checks.
 - `npm run validate` — Office manifest validation.
 - `npm run validate:manifest:prod` — fail production manifests that still contain localhost or example URLs.
+- GitHub Actions CI runs lint, tests, build, and production manifest URL checks on pull requests.
 
 ## Backend API contract
 
@@ -68,6 +69,9 @@ Dashboard payloads should match the `DashboardItem` interface in `src/taskpane/c
 ## Reliability and data handling notes
 
 - The API client adds request IDs, authorization headers from Office SSO when available, idempotency keys for write requests, timeouts, and retry handling for transient server errors.
-- Dashboard saves validate payload shape before syncing and download a JSON backup if syncing fails.
+- Dashboard saves validate payload shape before syncing, keep a recoverable local draft, and download a JSON backup if syncing fails.
+- PDF exports allow configurable filenames, quality scale, and margins.
 - Excel range import analyzes the selected range, detects header rows, supports multiple numeric series, and records the source range for refreshes.
+- Snapshot history highlights title, widget, layout, and styling differences and can duplicate a snapshot into a new dashboard.
+- First-run onboarding guides users through identity status, data-source choice, and the next dashboard action.
 - Production identity should come from Office SSO; localStorage user email and the localStorage API fallback are retained only for local development.

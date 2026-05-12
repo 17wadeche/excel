@@ -1,7 +1,7 @@
 // src/taskpane/components/Dashboard.tsx
 import React, { useState, useEffect, useRef, useContext, useMemo, useCallback } from "react";
 import { Responsive, WidthProvider } from "react-grid-layout/legacy";
-import { Modal, Card, Button, Tooltip, message, Spin, Switch } from "antd";
+import { Modal, Card, Button, Tooltip, message, Spin, Switch, Alert, Space } from "antd";
 import EditWidgetForm from "./EditWidgetForm";
 import MetricWidget from "./widgets/MetricWidget";
 import { BREAKPOINTS, GRID_COLS } from "./layoutConstants";
@@ -53,6 +53,12 @@ import jsPDF from "jspdf";
 import PresentationDashboard from "./PresentationDashboard";
 import { dashboardApi } from "../utils/apiClient";
 import { logger } from "../utils/logger";
+import {
+  clearDashboardDraft,
+  createDashboardDraftDownload,
+  getDashboardDraft,
+  saveDashboardDraft,
+} from "../utils/draftStore";
 import { validateDashboardPayload, createBackupFileName } from "../utils/dashboardValidation";
 import { useParams } from "react-router-dom";
 const defaultTitleWidget: Widget = {
@@ -184,6 +190,7 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
     const [saveStatusMessage, setSaveStatusMessage] = useState("Saved");
+    const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
     const hasTrackedInitialDashboardState = useRef(false);
     const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
     const dashboardWidth = dashboardBorderSettings.width
@@ -317,6 +324,8 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
     useEffect(() => {
       if (id) {
         setCurrentDashboardId(id);
+        const draft = getDashboardDraft(id);
+        setDraftSavedAt(draft?.savedAt ?? null);
       }
     }, [id, setCurrentDashboardId]);
     useEffect(() => {
@@ -375,13 +384,17 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
           });
           setHasUnsavedChanges(false);
           setLastSavedAt(new Date());
+          clearDashboardDraft(currentDashboardId);
+          setDraftSavedAt(null);
           setSaveStatusMessage("Saved");
           message.success("Dashboard saved successfully!");
         } catch (err) {
           logger.error("Error saving dashboard:", err);
+          saveDashboardDraft(updatedDashboard, err instanceof Error ? err.message : "Save failed");
+          setDraftSavedAt(new Date().toISOString());
           downloadDashboardBackup(updatedDashboard);
-          setSaveStatusMessage("Save failed - backup downloaded");
-          message.error("Failed to save changes to server. A local JSON backup was downloaded.");
+          setSaveStatusMessage("Save failed - draft saved locally");
+          message.error("Failed to save changes to server. A local draft and JSON backup were saved.");
         } finally {
           setIsSaving(false);
         }
@@ -750,6 +763,39 @@ const Dashboard: React.FC<DashboardProps> = React.memo(
               Exit Full Screen
             </Button>
           </div>
+        )}
+        {draftSavedAt && currentDashboardId && (
+          <Alert
+            type="warning"
+            showIcon
+            title="Unsynced local draft available"
+            description={`A local recovery draft was saved ${new Date(draftSavedAt).toLocaleString()}. Download it before clearing if you need to recover unsynced changes.`}
+            action={
+              <Space>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    const draft = getDashboardDraft(currentDashboardId);
+                    if (draft) {
+                      createDashboardDraftDownload(draft);
+                    }
+                  }}
+                >
+                  Download Draft
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    clearDashboardDraft(currentDashboardId);
+                    setDraftSavedAt(null);
+                  }}
+                >
+                  Clear
+                </Button>
+              </Space>
+            }
+            style={{ marginBottom: 8 }}
+          />
         )}
         <div
           id="dashboard-container"

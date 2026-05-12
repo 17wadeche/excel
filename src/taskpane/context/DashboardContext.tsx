@@ -35,6 +35,11 @@ import { ReportItem } from "../components/types";
 import { useWorkbookIdentity } from "../hooks/useWorkbookIdentity";
 import SelectTableModal from "../components/SelectTableModal";
 import "chartjs-chart-box-and-violin-plot";
+export interface DashboardExportOptions {
+  fileName?: string;
+  scale?: number;
+  margin?: number;
+}
 interface DashboardContextProps {
   widgets: Widget[];
   dashboards: DashboardItem[];
@@ -74,7 +79,7 @@ interface DashboardContextProps {
   setCurrentDashboard: (dashboard: DashboardItem | null) => void;
   updateLayoutsForNewWidgets: (widgets: Widget[]) => void;
   currentWorkbookId: string;
-  exportDashboardAsPDF: () => Promise<void>;
+  exportDashboardAsPDF: (options?: DashboardExportOptions) => Promise<void>;
   emailDashboard: () => void;
   dashboardTitle: string;
   setDashboardTitle: (title: string) => void;
@@ -2431,7 +2436,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
           sheet.load("name");
           await context.sync();
           if (sheet.isNullObject) {
-            logger.warn("[setupGanttEventHandlers] Gantt worksheet not found. Aborting...");
+            logger.debug("[setupGanttEventHandlers] Gantt worksheet not found. Skipping optional handler setup.");
             return;
           }
           logger.debug(
@@ -2459,7 +2464,7 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
             sheet.load("name");
             await context.sync();
             if (sheet.isNullObject) {
-              logger.warn("[setupGanttEventHandlers] Cleanup: Gantt sheet not found.");
+              logger.debug("[setupGanttEventHandlers] Cleanup: Gantt sheet not found.");
               return;
             }
             logger.debug("[setupGanttEventHandlers] Cleanup: removing onChanged handlers...");
@@ -2654,7 +2659,9 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       message.error("Failed to update metric value. Please ensure the cell address is valid.");
     }
   };
-  const buildDashboardPdf = async (): Promise<{ pdf: jsPDF; fileName: string }> => {
+  const buildDashboardPdf = async (
+    options: DashboardExportOptions = {}
+  ): Promise<{ pdf: jsPDF; fileName: string }> => {
     const container = document.getElementById("dashboard-container");
     if (!container) {
       throw new Error("Dashboard container not found.");
@@ -2667,11 +2674,11 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       backgroundColor: dashboardBorderSettings.backgroundColor || "#FFF",
       width: containerWidth,
       height: containerHeight,
-      scale: 2,
+      scale: options.scale ?? 2,
       scrollX: 0,
       scrollY: 0,
     });
-    const margin = 20;
+    const margin = options.margin ?? 20;
     const canvasWidthPx = canvas.width;
     const canvasHeightPx = canvas.height;
     const pdf = new jsPDF("p", "pt", [canvasWidthPx + margin * 2, canvasHeightPx + margin * 2]);
@@ -2687,7 +2694,11 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
       .replace(/[^a-z0-9-_]+/gi, "-")
       .replace(/^-+|-+$/g, "")
       .toLowerCase();
-    return { pdf, fileName: `${safeTitle || "dashboard"}.pdf` };
+    const requestedName = options.fileName?.trim();
+    const safeRequestedName = requestedName
+      ? requestedName.replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase()
+      : "";
+    return { pdf, fileName: `${safeRequestedName || safeTitle || "dashboard"}.pdf` };
   };
   const downloadDashboardBackup = (dashboard: DashboardItem) => {
     const blob = new Blob([JSON.stringify(dashboard, null, 2)], { type: "application/json" });
@@ -2700,9 +2711,9 @@ export const DashboardProvider: React.FC<DashboardProviderProps> = ({
     document.body.removeChild(link);
     URL.revokeObjectURL(downloadUrl);
   };
-  const exportDashboardAsPDF = async (): Promise<void> => {
+  const exportDashboardAsPDF = async (options: DashboardExportOptions = {}): Promise<void> => {
     try {
-      const { pdf, fileName } = await buildDashboardPdf();
+      const { pdf, fileName } = await buildDashboardPdf(options);
       pdf.save(fileName);
       message.success(`Dashboard exported as ${fileName}.`);
     } catch (error) {
